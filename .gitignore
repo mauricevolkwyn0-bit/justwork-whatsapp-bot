@@ -4,3 +4,4 @@ echo "node_modules/
 .env.local
 dist/
 .vercel/" > .gitignore
+.vercel
