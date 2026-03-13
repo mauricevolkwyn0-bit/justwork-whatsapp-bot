@@ -1,0 +1,6 @@
+# Create .gitignore
+echo "node_modules/
+.env
+.env.local
+dist/
+.vercel/" > .gitignore
