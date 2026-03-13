@@ -19,9 +19,6 @@ export const verifyWebhook = (req: Request, res: Response) => {
 export const receiveWebhook = async (req: Request, res: Response) => {
   const body = req.body;
 
-  // Always respond to Meta immediately
-  res.status(200).send("EVENT_RECEIVED");
-
   if (body.object === "whatsapp_business_account") {
     for (const entry of body.entry || []) {
       for (const change of entry.changes || []) {
@@ -48,4 +45,7 @@ export const receiveWebhook = async (req: Request, res: Response) => {
       }
     }
   }
+
+  // Respond to Meta AFTER processing
+  res.status(200).send("EVENT_RECEIVED");
 };
