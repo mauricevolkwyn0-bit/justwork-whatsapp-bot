@@ -3,11 +3,12 @@ import { WhatsAppWebhookBody, WhatsAppMessage } from "../types/bot";
 import { getOrCreateSession } from "../services/session.service";
 import { routeMessage } from "../routes/bot.router";
 import { supabase } from "../services/supabase.service";
+import { WHATSAPP_VERIFY_TOKEN } from "../config/env";
 
 // ─── Webhook verification (GET) ───────────────────────────────────────────
 
 export const verifyWebhook = (req: Request, res: Response): void => {
-  const VERIFY_TOKEN = process.env.WHATSAPP_VERIFY_TOKEN;
+  const VERIFY_TOKEN = WHATSAPP_VERIFY_TOKEN;
   const mode = req.query["hub.mode"];
   const token = req.query["hub.verify_token"];
   const challenge = req.query["hub.challenge"];
