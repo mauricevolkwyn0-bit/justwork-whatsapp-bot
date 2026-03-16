@@ -9,6 +9,7 @@ export enum BotStep {
   ASK_PROVINCE = "ASK_PROVINCE",
   ASK_CITY = "ASK_CITY",
   ASK_INDUSTRY = "ASK_INDUSTRY",
+  ASK_SUB_INDUSTRY = "ASK_SUB_INDUSTRY",
   ASK_JOB_TITLE = "ASK_JOB_TITLE",
   ASK_EXPERIENCE = "ASK_EXPERIENCE",
   ASK_DRIVERS_LICENSE = "ASK_DRIVERS_LICENSE",
@@ -34,6 +35,8 @@ export interface SessionData {
   city?: string | undefined;
   industry_id?: number | undefined;
   industry_name?: string | undefined;
+  sub_industry_id?: number | undefined;
+  sub_industry_name?: string | undefined;
   job_title_ids?: number[] | undefined;
   job_title_names?: string[] | undefined;
   years_experience?: number | undefined;
@@ -58,6 +61,7 @@ export interface BotSession {
 }
 
 export interface WhatsAppMessage {
+  id?: string | undefined;
   from: string;
   type: "text" | "interactive" | "document" | "image";
   text?: { body: string };

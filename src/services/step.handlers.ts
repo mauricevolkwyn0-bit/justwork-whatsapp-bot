@@ -9,6 +9,7 @@ import { updateSession } from "../services/session.service";
 import {
   getProvinces,
   getIndustries,
+  getSubIndustries,
   getJobTitles,
   getDriversLicenseCodes,
   getCriminalOffences,
@@ -384,28 +385,80 @@ export async function handleAskIndustry(session: BotSession, msg: WhatsAppMessag
   const industryId = parseInt(reply.replace("IND_", ""), 10);
   const industryName = getMessageLabel(msg);
 
-  const jobTitles = await getJobTitles();
-  const chunks = chunkArray(jobTitles, 10);
-  const sections = chunks.map((chunk, i) => ({
-    title: i === 0 ? "Job Titles" : `Job Titles (cont.)`,
-    rows: chunk.map((jt) => ({ id: `JT_${jt.id}`, title: jt.name })),
-  }));
+  const subIndustries = await getSubIndustries(industryName);
 
-  await sendListMessage(
-    session.phone_number,
-    `What is your job title or the role you are looking for?`,
-    "Select job title",
-    sections
-  );
+  if (subIndustries.length > 0) {
+    const chunks = chunkArray(subIndustries, 10);
+    const sections = chunks.map((chunk, i) => ({
+      title: i === 0 ? `${industryName}` : `${industryName} (cont.)`,
+      rows: chunk.map((sub) => ({ id: `SUB_${sub.id}_${sub.name}`, title: sub.name })),
+    }));
+
+    await sendListMessage(
+      session.phone_number,
+      `💼 Which area of *${industryName}* do you specialise in?`,
+      "Select specialisation",
+      sections
+    );
+
+    await updateSession(
+      session.phone_number,
+      BotStep.ASK_SUB_INDUSTRY,
+      {
+        ...session.session_data,
+        industry_id: industryId,
+        industry_name: industryName,
+      }
+    );
+  } else {
+    // No sub-industries — go straight to job titles
+    await showJobTitles(session.phone_number);
+    await updateSession(
+      session.phone_number,
+      BotStep.ASK_JOB_TITLE,
+      {
+        ...session.session_data,
+        industry_id: industryId,
+        industry_name: industryName,
+      }
+    );
+  }
+}
+
+export async function handleAskSubIndustry(session: BotSession, msg: WhatsAppMessage) {
+  const reply = getMessageText(msg);
+  if (!reply.startsWith("SUB_")) {
+    await sendTextMessage(session.phone_number, "Please select your specialisation from the list.");
+    return;
+  }
+
+  const subIndustryName = getMessageLabel(msg);
 
   await updateSession(
     session.phone_number,
     BotStep.ASK_JOB_TITLE,
     {
       ...session.session_data,
-      industry_id: industryId,
-      industry_name: industryName,
+      sub_industry_name: subIndustryName,
     }
+  );
+
+  await showJobTitles(session.phone_number);
+}
+
+async function showJobTitles(phoneNumber: string) {
+  const jobTitles = await getJobTitles();
+  const chunks = chunkArray(jobTitles, 10);
+  const sections = chunks.map((chunk, i) => ({
+    title: i === 0 ? "Job Titles" : "Job Titles (cont.)",
+    rows: chunk.map((jt) => ({ id: `JT_${jt.id}`, title: jt.name })),
+  }));
+
+  await sendListMessage(
+    phoneNumber,
+    `What is your job title or the role you are looking for?`,
+    "Select job title",
+    sections
   );
 }
 

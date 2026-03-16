@@ -101,6 +101,57 @@ export async function getJobTitles(): Promise<LookupRow[]> {
   ];
 }
 
+export async function getSubIndustries(industryName: string): Promise<LookupRow[]> {
+  const subIndustries: Record<string, string[]> = {
+    "Information Technology": [
+      "Software Development", "Web Development", "Mobile Development",
+      "Cybersecurity", "Networking", "Cloud Computing",
+      "Data Science", "IT Support", "DevOps", "UI/UX Design"
+    ],
+    "Mining": [
+      "Gold Mining", "Coal Mining", "Platinum Mining",
+      "Diamond Mining", "Iron Ore", "Chrome Mining",
+      "Manganese Mining", "Underground Mining", "Surface Mining"
+    ],
+    "Construction": [
+      "Civil Engineering", "Electrical", "Plumbing",
+      "Bricklaying", "Carpentry", "Project Management",
+      "Quantity Surveying", "Architecture", "HVAC"
+    ],
+    "Manufacturing": [
+      "Production", "Quality Control", "Maintenance",
+      "Logistics", "Packaging", "Assembly", "Welding", "Machining"
+    ],
+    "Retail": [
+      "Store Management", "Cashier", "Stock Control",
+      "Merchandising", "Customer Service", "Sales", "Buying"
+    ],
+    "Agriculture": [
+      "Crop Farming", "Livestock", "Horticulture",
+      "Agronomy", "Farm Management", "Irrigation", "Forestry"
+    ],
+    "Transport & Logistics": [
+      "Truck Driving", "Warehousing", "Supply Chain",
+      "Fleet Management", "Courier", "Freight", "Customs Clearing"
+    ],
+    "Hospitality": [
+      "Hotel Management", "Food & Beverage", "Kitchen",
+      "Front Office", "Housekeeping", "Events", "Tourism"
+    ],
+    "Healthcare": [
+      "Nursing", "Medical", "Pharmacy", "Radiology",
+      "Physiotherapy", "Administration", "Emergency Care", "Dentistry"
+    ],
+    "Finance & Insurance": [
+      "Accounting", "Auditing", "Banking", "Financial Planning",
+      "Insurance", "Tax", "Investment", "Risk Management"
+    ],
+  };
+
+  const subs = subIndustries[industryName] ?? [];
+  return subs.map((name, i) => ({ id: i + 1, name }));
+}
+
 export async function getDriversLicenseCodes(): Promise<LookupRow[]> {
   return [
     { id: 1, name: "A" },
