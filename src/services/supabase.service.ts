@@ -1,7 +1,7 @@
 import { createClient } from "@supabase/supabase-js";
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
-const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_KEY; // ← fix name to match Vercel
+const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_KEY; // ← matches Vercel
 
 console.log("[Supabase] URL:", SUPABASE_URL);
 console.log("[Supabase] Key present:", !!SUPABASE_SERVICE_ROLE_KEY);
