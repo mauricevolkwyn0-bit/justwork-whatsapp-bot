@@ -175,7 +175,7 @@ export async function handleAskIdNumber(session: BotSession, msg: WhatsAppMessag
     `📱 *Step 3 of 8 — Phone Number*\n\nIs this your correct WhatsApp number?\n*${session.phone_number}*`,
     [
       { id: "PHONE_YES", title: "Yes, that's correct" },
-      { id: "PHONE_NO", title: "Use a different number" },
+      { id: "PHONE_NO", title: "Use different number" },
     ]
   );
 
@@ -715,7 +715,7 @@ async function sendReviewSummary(session: BotSession, data: SessionData) {
     session.phone_number,
     "Is all of the above information correct?",
     [
-      { id: "CONFIRM_YES", title: "Confirm ✅" },
+      { id: "CONFIRM_YES", title: "Confirm" },
       { id: "CONFIRM_EDIT", title: "Edit" },
     ]
   );
