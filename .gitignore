@@ -5,3 +5,4 @@ echo "node_modules/
 dist/
 .vercel/" > .gitignore
 .vercel
+.env*.local
