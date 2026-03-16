@@ -60,9 +60,9 @@ async function processMessage(msg: WhatsAppMessage): Promise<void> {
 
   console.log(`[Bot] Processing message from ${phoneNumber} — type: ${msg.type}`);
 
-  try {
-    console.log("[Bot] Inserting message log...");
-    await supabase.from("whatsapp_message_logs").insert({
+  // Fire-and-forget — never let logging block or crash the bot
+  void (async () => {
+    const { error } = await supabase.from("whatsapp_message_logs").insert({
       phone_number: phoneNumber,
       direction: "INBOUND",
       message_type: msg.type,
@@ -71,7 +71,11 @@ async function processMessage(msg: WhatsAppMessage): Promise<void> {
           ? msg.text?.body
           : JSON.stringify(msg.interactive ?? msg.document ?? msg.image),
     });
+    if (error) console.error("[Bot] Message log failed (non-fatal):", error);
+    else console.log("[Bot] Message log saved");
+  })();
 
+  try {
     console.log("[Bot] Getting session...");
     const session = await getOrCreateSession(phoneNumber);
     console.log(`[Bot] Session step: ${session.current_step}`);
