@@ -2,7 +2,6 @@ import { Request, Response } from "express";
 import { WhatsAppWebhookBody, WhatsAppMessage } from "../types/bot";
 import { getOrCreateSession } from "../services/session.service";
 import { routeMessage } from "../routes/bot.router";
-import { supabase } from "../services/supabase.service";
 import { WHATSAPP_VERIFY_TOKEN } from "../config/env";
 
 // ─── Webhook verification (GET) ───────────────────────────────────────────
@@ -26,7 +25,6 @@ export const verifyWebhook = (req: Request, res: Response): void => {
 // ─── Incoming message handler (POST) ─────────────────────────────────────
 
 export const receiveWebhook = async (req: Request, res: Response): Promise<void> => {
-  // Always respond 200 immediately so WhatsApp doesn't retry
   res.sendStatus(200);
 
   console.log("[Webhook] Body received:", JSON.stringify(req.body, null, 2));
@@ -45,7 +43,6 @@ export const receiveWebhook = async (req: Request, res: Response): Promise<void>
         console.log("[Webhook] No messages in change, skipping");
         continue;
       }
-
       for (const msg of messages) {
         await processMessage(msg);
       }
@@ -60,21 +57,6 @@ async function processMessage(msg: WhatsAppMessage): Promise<void> {
   if (!phoneNumber) return;
 
   console.log(`[Bot] Processing message from ${phoneNumber} — type: ${msg.type}`);
-
-  // Fire-and-forget — never let logging block or crash the bot
-  void (async () => {
-    const { error } = await supabase.from("whatsapp_message_logs").insert({
-      phone_number: phoneNumber,
-      direction: "INBOUND",
-      message_type: msg.type,
-      message_body:
-        msg.type === "text"
-          ? msg.text?.body
-          : JSON.stringify(msg.interactive ?? msg.document ?? msg.image),
-    });
-    if (error) console.error("[Bot] Message log failed (non-fatal):", error);
-    else console.log("[Bot] Message log saved");
-  })();
 
   try {
     console.log("[Bot] Getting session...");
