@@ -1,25 +1,31 @@
+import { supabase } from "./supabase.service";
 import { BotSession, BotStep, SessionData } from "../types/bot";
 
-// In-memory store — resets on each Vercel cold start
-const sessions = new Map<string, BotSession>();
-
 export async function getSession(phoneNumber: string): Promise<BotSession | null> {
-  console.log("[Session] getSession (mock) for:", phoneNumber);
-  return sessions.get(phoneNumber) ?? null;
+  const { data, error } = await supabase
+    .from("bot_sessions")
+    .select("*")
+    .eq("phone_number", phoneNumber)
+    .maybeSingle();
+  if (error) {
+    console.error("[Session] getSession error:", error.message);
+    return null;
+  }
+  return data as BotSession | null;
 }
 
 export async function createSession(phoneNumber: string): Promise<BotSession> {
-  console.log("[Session] createSession (mock) for:", phoneNumber);
-  const session: BotSession = {
-    session_id: crypto.randomUUID(),
-    phone_number: phoneNumber,
-    current_step: BotStep.START,
-    session_data: {},
-    last_active_at: new Date().toISOString(),
-    created_at: new Date().toISOString(),
-  };
-  sessions.set(phoneNumber, session);
-  return session;
+  const { data, error } = await supabase
+    .from("bot_sessions")
+    .insert({
+      phone_number: phoneNumber,
+      current_step: BotStep.START,
+      session_data: {},
+    })
+    .select()
+    .single();
+  if (error || !data) throw new Error(`Failed to create session: ${error?.message}`);
+  return data as BotSession;
 }
 
 export async function updateSession(
@@ -28,14 +34,17 @@ export async function updateSession(
   sessionData: SessionData,
   candidateId?: string
 ): Promise<void> {
-  console.log("[Session] updateSession (mock) for:", phoneNumber, "step:", step);
-  const existing = sessions.get(phoneNumber);
-  if (existing) {
-    existing.current_step = step;
-    existing.session_data = sessionData;
-    existing.last_active_at = new Date().toISOString();
-    if (candidateId) existing.candidate_id = candidateId;
-  }
+  const update: Record<string, unknown> = {
+    current_step: step,
+    session_data: sessionData,
+    last_active_at: new Date().toISOString(),
+  };
+  if (candidateId) update.candidate_id = candidateId;
+  const { error } = await supabase
+    .from("bot_sessions")
+    .update(update)
+    .eq("phone_number", phoneNumber);
+  if (error) throw new Error(`Failed to update session: ${error.message}`);
 }
 
 export async function getOrCreateSession(phoneNumber: string): Promise<BotSession> {

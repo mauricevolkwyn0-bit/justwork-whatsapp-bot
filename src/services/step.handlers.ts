@@ -54,7 +54,7 @@ export async function handleStart(session: BotSession, _msg: WhatsAppMessage) {
   await sendInteractiveWithImageHeader(
     phone_number,
     WELCOME_IMAGE_URL,
-    `Welcome to *Just Work*!\n\nLooking for work? We'll connect you with multiple recruitment companies.\n\n*Don't go looking for work — let the work come to you.*\n\nWhen a recruiter posts a job that fits your qualifications, we send it straight to you. 🚀\n\nReady to start? Tap Register below!`,
+    `Welcome to *Just Work*!\n\nLooking for work? We'll connect you with multiple recruitment companies.\n\n*Don't go looking for work — let the work come to you.*\n\nWhen a recruiter posts a job that fits your qualifications, we send it straight to you. \n\nReady to start? Tap Register below!`,
     [{ id: "REGISTER", title: "Register" }]
   );
 
