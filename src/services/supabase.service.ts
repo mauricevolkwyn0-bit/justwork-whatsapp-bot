@@ -13,7 +13,10 @@ export const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY, {
     autoRefreshToken: false,
     persistSession: false,
   },
-  global: {
-    fetch: (url, options) => fetch(url, { ...options, signal: AbortSignal.timeout(8000) }),
-  },
+});
+
+// Test connection on startup
+supabase.from("bot_sessions").select("count").limit(1).then(({ error }) => {
+  if (error) console.error("[Supabase] Connection test failed:", error.message);
+  else console.log("[Supabase] Connection test passed ✅");
 });
