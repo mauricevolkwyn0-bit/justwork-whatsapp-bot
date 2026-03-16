@@ -1,51 +1,67 @@
 import { Request, Response } from "express";
-import { WHATSAPP_VERIFY_TOKEN } from "../config/env";
-import { sendWhatsAppMessage } from "../services/whatsapp.service";
+import { WhatsAppWebhookBody, WhatsAppMessage } from "../types/bot";
+import { getOrCreateSession } from "../services/session.service";
+import { routeMessage } from "../routes/bot.router";
+import { supabase } from "../services/supabase.service";
 
-export const verifyWebhook = (req: Request, res: Response) => {
+// ─── Webhook verification (GET) ───────────────────────────────────────────
+
+export const verifyWebhook = (req: Request, res: Response): void => {
+  const VERIFY_TOKEN = process.env.WHATSAPP_WEBHOOK_VERIFY_TOKEN;
   const mode = req.query["hub.mode"];
   const token = req.query["hub.verify_token"];
   const challenge = req.query["hub.challenge"];
 
-  if (mode === "subscribe" && token === WHATSAPP_VERIFY_TOKEN) {
-    console.log("✅ Webhook verified by Meta");
+  if (mode === "subscribe" && token === VERIFY_TOKEN) {
+    console.log("[Webhook] Verification successful");
     res.status(200).send(challenge);
-  } else {
-    console.error("❌ Webhook verification failed");
-    res.status(403).send("Forbidden");
+    return;
   }
+  res.sendStatus(403);
 };
 
-export const receiveWebhook = async (req: Request, res: Response) => {
-  const body = req.body;
+// ─── Incoming message handler (POST) ─────────────────────────────────────
 
-  if (body.object === "whatsapp_business_account") {
-    for (const entry of body.entry || []) {
-      for (const change of entry.changes || []) {
-        const messages = change.value?.messages;
-        if (messages?.length) {
-          for (const message of messages) {
-            const from = message.from;
-            const type = message.type;
+export const receiveWebhook = async (req: Request, res: Response): Promise<void> => {
+  // Always respond 200 immediately so WhatsApp doesn't retry
+  res.sendStatus(200);
 
-            console.log(`📩 Message from ${from}, type: ${type}`);
+  const body = req.body as WhatsAppWebhookBody;
+  if (body.object !== "whatsapp_business_account") return;
 
-            if (type === "text") {
-              const text = message.text.body;
-              console.log(`💬 Text: ${text}`);
-              try {
-                await sendWhatsAppMessage(from, `👋 Hi! Welcome to JustWork. You said: "${text}"`);
-                console.log(`✅ Reply sent to ${from}`);
-              } catch (err: any) {
-                console.error(`❌ Failed to send reply:`, err?.response?.data || err?.message || err);
-              }
-            }
-          }
-        }
+  for (const entry of body.entry ?? []) {
+    for (const change of entry.changes ?? []) {
+      const messages = change.value?.messages;
+      if (!messages?.length) continue;
+
+      for (const msg of messages) {
+        await processMessage(msg);
       }
     }
   }
-
-  // Respond to Meta AFTER processing
-  res.status(200).send("EVENT_RECEIVED");
 };
+
+// ─── Core message processor ───────────────────────────────────────────────
+
+async function processMessage(msg: WhatsAppMessage): Promise<void> {
+  const phoneNumber = msg.from;
+  if (!phoneNumber) return;
+
+  try {
+    // Log to whatsapp_message_logs
+    await supabase.from("whatsapp_message_logs").insert({
+      phone_number: phoneNumber,
+      direction: "INBOUND",
+      message_type: msg.type,
+      message_body:
+        msg.type === "text"
+          ? msg.text?.body
+          : JSON.stringify(msg.interactive ?? msg.document ?? msg.image),
+    });
+
+    const session = await getOrCreateSession(phoneNumber);
+    await routeMessage(session, msg);
+  } catch (err) {
+    console.error(`[Webhook] Error processing message from ${phoneNumber}:`, err);
+  }
+}
