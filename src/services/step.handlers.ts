@@ -397,7 +397,7 @@ export async function handleAskIndustry(session: BotSession, msg: WhatsAppMessag
     await sendListMessage(
       session.phone_number,
       `💼 Which area of *${industryName}* do you specialise in?`,
-      "Select specialisation",
+      "Specialise",
       sections
     );
 
