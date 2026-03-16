@@ -1,4 +1,3 @@
-import axios from "axios";
 import {
   WHATSAPP_API_URL,
   WHATSAPP_PHONE_NUMBER_ID,
@@ -13,6 +12,21 @@ const getHeaders = () => ({
   "Content-Type": "application/json",
 });
 
+async function postToWhatsApp(payload: object): Promise<void> {
+  const res = await fetch(getUrl(), {
+    method: "POST",
+    headers: getHeaders(),
+    body: JSON.stringify(payload),
+  });
+
+  if (!res.ok) {
+    const err = await res.text();
+    console.error("[WhatsApp] API error:", err);
+  } else {
+    console.log("[WhatsApp] Message sent successfully, status:", res.status);
+  }
+}
+
 // ─── OTP (existing) ────────────────────────────────────────────────────────
 
 export const sendWhatsAppOTP = async (
@@ -23,7 +37,7 @@ export const sendWhatsAppOTP = async (
   await sendTextMessage(phoneNumber, message);
 };
 
-// ─── Text (existing + used by bot) ────────────────────────────────────────
+// ─── Text ─────────────────────────────────────────────────────────────────
 
 export const sendWhatsAppMessage = async (
   phoneNumber: string,
@@ -33,17 +47,13 @@ export const sendWhatsAppMessage = async (
 };
 
 export async function sendTextMessage(to: string, body: string): Promise<void> {
-  try {
-    console.log("[WhatsApp] sendTextMessage to:", to);
-    await axios.post(
-      getUrl(),
-      { messaging_product: "whatsapp", to, type: "text", text: { body } },
-      { headers: getHeaders() }
-    );
-    console.log("[WhatsApp] sendTextMessage success");
-  } catch (err: any) {
-    console.error("[WhatsApp] sendTextMessage failed:", JSON.stringify(err?.response?.data ?? err?.message));
-  }
+  console.log("[WhatsApp] sendTextMessage to:", to);
+  await postToWhatsApp({
+    messaging_product: "whatsapp",
+    to,
+    type: "text",
+    text: { body },
+  });
 }
 
 // ─── Image ─────────────────────────────────────────────────────────────────
@@ -53,22 +63,13 @@ export async function sendImageMessage(
   imageUrl: string,
   caption: string
 ): Promise<void> {
-  try {
-    console.log("[WhatsApp] sendImageMessage to:", to);
-    await axios.post(
-      getUrl(),
-      {
-        messaging_product: "whatsapp",
-        to,
-        type: "image",
-        image: { link: imageUrl, caption },
-      },
-      { headers: getHeaders() }
-    );
-    console.log("[WhatsApp] sendImageMessage success");
-  } catch (err: any) {
-    console.error("[WhatsApp] sendImageMessage failed:", JSON.stringify(err?.response?.data ?? err?.message));
-  }
+  console.log("[WhatsApp] sendImageMessage to:", to);
+  await postToWhatsApp({
+    messaging_product: "whatsapp",
+    to,
+    type: "image",
+    image: { link: imageUrl, caption },
+  });
 }
 
 // ─── Button (interactive) ──────────────────────────────────────────────────
@@ -78,31 +79,22 @@ export async function sendButtonMessage(
   body: string,
   buttons: Array<{ id: string; title: string }>
 ): Promise<void> {
-  try {
-    console.log("[WhatsApp] sendButtonMessage to:", to);
-    await axios.post(
-      getUrl(),
-      {
-        messaging_product: "whatsapp",
-        to,
-        type: "interactive",
-        interactive: {
-          type: "button",
-          body: { text: body },
-          action: {
-            buttons: buttons.map((b) => ({
-              type: "reply",
-              reply: { id: b.id, title: b.title },
-            })),
-          },
-        },
+  console.log("[WhatsApp] sendButtonMessage to:", to);
+  await postToWhatsApp({
+    messaging_product: "whatsapp",
+    to,
+    type: "interactive",
+    interactive: {
+      type: "button",
+      body: { text: body },
+      action: {
+        buttons: buttons.map((b) => ({
+          type: "reply",
+          reply: { id: b.id, title: b.title },
+        })),
       },
-      { headers: getHeaders() }
-    );
-    console.log("[WhatsApp] sendButtonMessage success");
-  } catch (err: any) {
-    console.error("[WhatsApp] sendButtonMessage failed:", JSON.stringify(err?.response?.data ?? err?.message));
-  }
+    },
+  });
 }
 
 // ─── List (interactive) ────────────────────────────────────────────────────
@@ -116,38 +108,29 @@ export async function sendListMessage(
     rows: Array<{ id: string; title: string; description?: string }>;
   }>
 ): Promise<void> {
-  try {
-    console.log("[WhatsApp] sendListMessage to:", to);
-    await axios.post(
-      getUrl(),
-      {
-        messaging_product: "whatsapp",
-        to,
-        type: "interactive",
-        interactive: {
-          type: "list",
-          body: { text: body },
-          action: { button: buttonLabel, sections },
-        },
-      },
-      { headers: getHeaders() }
-    );
-    console.log("[WhatsApp] sendListMessage success");
-  } catch (err: any) {
-    console.error("[WhatsApp] sendListMessage failed:", JSON.stringify(err?.response?.data ?? err?.message));
-  }
+  console.log("[WhatsApp] sendListMessage to:", to);
+  await postToWhatsApp({
+    messaging_product: "whatsapp",
+    to,
+    type: "interactive",
+    interactive: {
+      type: "list",
+      body: { text: body },
+      action: { button: buttonLabel, sections },
+    },
+  });
 }
 
 // ─── Media download (for CV uploads) ──────────────────────────────────────
 
 export async function downloadMediaBuffer(mediaId: string): Promise<Buffer> {
-  const { data: mediaData } = await axios.get(
+  const mediaRes = await fetch(
     `https://graph.facebook.com/v18.0/${mediaId}`,
     { headers: getHeaders() }
   );
-  const { data } = await axios.get(mediaData.url, {
-    headers: getHeaders(),
-    responseType: "arraybuffer",
-  });
-  return Buffer.from(data);
+  const mediaData = await mediaRes.json() as { url: string };
+
+  const fileRes = await fetch(mediaData.url, { headers: getHeaders() });
+  const arrayBuffer = await fileRes.arrayBuffer();
+  return Buffer.from(arrayBuffer);
 }
