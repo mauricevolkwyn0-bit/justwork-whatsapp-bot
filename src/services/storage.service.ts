@@ -1,4 +1,4 @@
-import { supabaseAdmin } from "./supabase.service";
+import { supabase } from "./supabase.service";
 
 type DocumentType = "cv" | "id-copy" | "drivers-license" | "certificates";
 type RecruitmentAssetType = "logo" | "registration-docs" | "contracts";
@@ -14,7 +14,7 @@ export const uploadCandidateDocument = async (
 ): Promise<string> => {
   const filePath = `${candidateId}/${documentType}/${fileName}`;
 
-  const { error } = await supabaseAdmin.storage
+  const { error } = await supabase.storage
     .from("candidate-documents")
     .upload(filePath, fileBuffer, {
       contentType: mimeType,
@@ -33,7 +33,7 @@ export const getCandidateDocumentUrl = async (
 ): Promise<string> => {
   const filePath = `${candidateId}/${documentType}/${fileName}`;
 
-  const { data } = await supabaseAdmin.storage
+  const { data } = await supabase.storage
     .from("candidate-documents")
     .createSignedUrl(filePath, 60 * 60); // 1 hour expiry
 
@@ -49,7 +49,7 @@ export const deleteCandidateDocument = async (
 ): Promise<void> => {
   const filePath = `${candidateId}/${documentType}/${fileName}`;
 
-  const { error } = await supabaseAdmin.storage
+  const { error } = await supabase.storage
     .from("candidate-documents")
     .remove([filePath]);
 
@@ -67,7 +67,7 @@ export const uploadRecruitmentAsset = async (
 ): Promise<string> => {
   const filePath = `${companyId}/${assetType}/${fileName}`;
 
-  const { error } = await supabaseAdmin.storage
+  const { error } = await supabase.storage
     .from("recruitment-assets")
     .upload(filePath, fileBuffer, {
       contentType: mimeType,
@@ -86,7 +86,7 @@ export const getRecruitmentAssetUrl = async (
 ): Promise<string> => {
   const filePath = `${companyId}/${assetType}/${fileName}`;
 
-  const { data } = await supabaseAdmin.storage
+  const { data } = await supabase.storage
     .from("recruitment-assets")
     .createSignedUrl(filePath, 60 * 60); // 1 hour expiry
 

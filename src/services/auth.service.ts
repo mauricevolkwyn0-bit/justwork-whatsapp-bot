@@ -1,4 +1,4 @@
-import { supabaseAdmin } from "./supabase.service";
+import { supabase } from "./supabase.service";
 import { generateOTP, saveOTP, verifyOTP } from "./otp.service";
 import { sendWhatsAppOTP } from "./whatsapp.service";
 
@@ -31,7 +31,7 @@ export const completeCandidateAuth = async (
   }
 
   // Check if auth user already exists
-  const { data: existingUsers } = await supabaseAdmin.auth.admin.listUsers();
+  const { data: existingUsers } = await supabase.auth.admin.listUsers();
   const existing = existingUsers?.users.find((u) => u.phone === phoneNumber);
 
   if (existing) {
@@ -39,7 +39,7 @@ export const completeCandidateAuth = async (
   }
 
   // Create new Supabase Auth user with phone number
-  const { data, error } = await supabaseAdmin.auth.admin.createUser({
+  const { data, error } = await supabase.auth.admin.createUser({
     phone: phoneNumber,
     phone_confirm: true,
   });
@@ -55,7 +55,7 @@ export const signUpRecruiter = async (
   email: string,
   password: string
 ): Promise<AuthResult> => {
-  const { data, error } = await supabaseAdmin.auth.admin.createUser({
+  const { data, error } = await supabase.auth.admin.createUser({
     email,
     password,
     email_confirm: false,

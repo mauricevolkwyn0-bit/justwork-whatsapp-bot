@@ -1,5 +1,5 @@
 import crypto from "crypto";
-import { supabaseAdmin } from "./supabase.service";
+import { supabase } from "./supabase.service";
 
 const OTP_EXPIRY_MINUTES = 10;
 
@@ -12,7 +12,7 @@ export const saveOTP = async (phoneNumber: string, otp: string): Promise<void> =
   const expiresAt = new Date(Date.now() + OTP_EXPIRY_MINUTES * 60 * 1000);
 
   // Store OTP in bot_sessions session_data
-  const { error } = await supabaseAdmin
+  const { error } = await supabase
     .from("bot_sessions")
     .upsert(
       {
@@ -35,7 +35,7 @@ export const verifyOTP = async (
   phoneNumber: string,
   submittedOtp: string
 ): Promise<{ valid: boolean; reason?: string }> => {
-  const { data: session, error } = await supabaseAdmin
+  const { data: session, error } = await supabase
     .from("bot_sessions")
     .select("session_data")
     .eq("phone_number", phoneNumber)
@@ -51,7 +51,7 @@ export const verifyOTP = async (
   }
 
   // Increment attempt count
-  await supabaseAdmin
+  await supabase
     .from("bot_sessions")
     .update({
       session_data: {
