@@ -52,9 +52,9 @@ function getMessageLabel(msg: WhatsAppMessage): string {
 export async function handleStart(session: BotSession, _msg: WhatsAppMessage) {
   const { phone_number } = session;
 
-  await sendImageMessage(
+  // Send text instead of image for now
+  await sendTextMessage(
     phone_number,
-    WELCOME_IMAGE_URL,
     `👋 Welcome to *JustWork*!\n\nLooking for work? We'll connect you with multiple recruitment companies.\n\n*Don't go looking for work — let the work come to you.*\n\nWhen a recruiter posts a job that fits your qualifications, we send it straight to you. 🚀\n\nReady to start? Tap Register below!`
   );
 
