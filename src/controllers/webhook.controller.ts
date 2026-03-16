@@ -25,29 +25,27 @@ export const verifyWebhook = (req: Request, res: Response): void => {
 // ─── Incoming message handler (POST) ─────────────────────────────────────
 
 export const receiveWebhook = async (req: Request, res: Response): Promise<void> => {
-  res.sendStatus(200);
-
   console.log("[Webhook] Body received:", JSON.stringify(req.body, null, 2));
 
   const body = req.body as WhatsAppWebhookBody;
 
   if (body.object !== "whatsapp_business_account") {
-    console.log("[Webhook] Skipping — object is:", body.object);
+    res.sendStatus(200);
     return;
   }
 
   for (const entry of body.entry ?? []) {
     for (const change of entry.changes ?? []) {
       const messages = change.value?.messages;
-      if (!messages?.length) {
-        console.log("[Webhook] No messages in change, skipping");
-        continue;
-      }
+      if (!messages?.length) continue;
       for (const msg of messages) {
         await processMessage(msg);
       }
     }
   }
+
+  // Send 200 AFTER all processing is complete
+  res.sendStatus(200);
 };
 
 // ─── Core message processor ───────────────────────────────────────────────
