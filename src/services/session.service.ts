@@ -2,12 +2,13 @@ import { supabase } from "./supabase.service";
 import { BotSession, BotStep, SessionData } from "../types/bot";
 
 export async function getSession(phoneNumber: string): Promise<BotSession | null> {
+  console.log("[Session] Querying bot_sessions for:", phoneNumber);
   const { data, error } = await supabase
     .from("bot_sessions")
     .select("*")
     .eq("phone_number", phoneNumber)
-    .maybeSingle(); // ← change .single() to .maybeSingle()
-
+    .maybeSingle();
+  console.log("[Session] Query result — data:", !!data, "error:", error?.message);
   if (error) {
     console.error("[Session] getSession error:", error.message);
     return null;
@@ -16,6 +17,7 @@ export async function getSession(phoneNumber: string): Promise<BotSession | null
 }
 
 export async function createSession(phoneNumber: string): Promise<BotSession> {
+  console.log("[Session] Creating new session for:", phoneNumber);
   const { data, error } = await supabase
     .from("bot_sessions")
     .insert({
@@ -25,11 +27,11 @@ export async function createSession(phoneNumber: string): Promise<BotSession> {
     })
     .select()
     .single();
-
   if (error || !data) {
     console.error("[Session] createSession error:", error?.message);
     throw new Error(`Failed to create session: ${error?.message}`);
   }
+  console.log("[Session] Session created:", data.session_id);
   return data as BotSession;
 }
 
