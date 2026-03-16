@@ -33,11 +33,17 @@ export const sendWhatsAppMessage = async (
 };
 
 export async function sendTextMessage(to: string, body: string): Promise<void> {
-  await axios.post(
-    getUrl(),
-    { messaging_product: "whatsapp", to, type: "text", text: { body } },
-    { headers: getHeaders() }
-  );
+  try {
+    console.log("[WhatsApp] sendTextMessage to:", to);
+    await axios.post(
+      getUrl(),
+      { messaging_product: "whatsapp", to, type: "text", text: { body } },
+      { headers: getHeaders() }
+    );
+    console.log("[WhatsApp] sendTextMessage success");
+  } catch (err: any) {
+    console.error("[WhatsApp] sendTextMessage failed:", JSON.stringify(err?.response?.data ?? err?.message));
+  }
 }
 
 // ─── Image ─────────────────────────────────────────────────────────────────
@@ -47,16 +53,22 @@ export async function sendImageMessage(
   imageUrl: string,
   caption: string
 ): Promise<void> {
-  await axios.post(
-    getUrl(),
-    {
-      messaging_product: "whatsapp",
-      to,
-      type: "image",
-      image: { link: imageUrl, caption },
-    },
-    { headers: getHeaders() }
-  );
+  try {
+    console.log("[WhatsApp] sendImageMessage to:", to);
+    await axios.post(
+      getUrl(),
+      {
+        messaging_product: "whatsapp",
+        to,
+        type: "image",
+        image: { link: imageUrl, caption },
+      },
+      { headers: getHeaders() }
+    );
+    console.log("[WhatsApp] sendImageMessage success");
+  } catch (err: any) {
+    console.error("[WhatsApp] sendImageMessage failed:", JSON.stringify(err?.response?.data ?? err?.message));
+  }
 }
 
 // ─── Button (interactive) ──────────────────────────────────────────────────
@@ -66,25 +78,31 @@ export async function sendButtonMessage(
   body: string,
   buttons: Array<{ id: string; title: string }>
 ): Promise<void> {
-  await axios.post(
-    getUrl(),
-    {
-      messaging_product: "whatsapp",
-      to,
-      type: "interactive",
-      interactive: {
-        type: "button",
-        body: { text: body },
-        action: {
-          buttons: buttons.map((b) => ({
-            type: "reply",
-            reply: { id: b.id, title: b.title },
-          })),
+  try {
+    console.log("[WhatsApp] sendButtonMessage to:", to);
+    await axios.post(
+      getUrl(),
+      {
+        messaging_product: "whatsapp",
+        to,
+        type: "interactive",
+        interactive: {
+          type: "button",
+          body: { text: body },
+          action: {
+            buttons: buttons.map((b) => ({
+              type: "reply",
+              reply: { id: b.id, title: b.title },
+            })),
+          },
         },
       },
-    },
-    { headers: getHeaders() }
-  );
+      { headers: getHeaders() }
+    );
+    console.log("[WhatsApp] sendButtonMessage success");
+  } catch (err: any) {
+    console.error("[WhatsApp] sendButtonMessage failed:", JSON.stringify(err?.response?.data ?? err?.message));
+  }
 }
 
 // ─── List (interactive) ────────────────────────────────────────────────────
@@ -98,20 +116,26 @@ export async function sendListMessage(
     rows: Array<{ id: string; title: string; description?: string }>;
   }>
 ): Promise<void> {
-  await axios.post(
-    getUrl(),
-    {
-      messaging_product: "whatsapp",
-      to,
-      type: "interactive",
-      interactive: {
-        type: "list",
-        body: { text: body },
-        action: { button: buttonLabel, sections },
+  try {
+    console.log("[WhatsApp] sendListMessage to:", to);
+    await axios.post(
+      getUrl(),
+      {
+        messaging_product: "whatsapp",
+        to,
+        type: "interactive",
+        interactive: {
+          type: "list",
+          body: { text: body },
+          action: { button: buttonLabel, sections },
+        },
       },
-    },
-    { headers: getHeaders() }
-  );
+      { headers: getHeaders() }
+    );
+    console.log("[WhatsApp] sendListMessage success");
+  } catch (err: any) {
+    console.error("[WhatsApp] sendListMessage failed:", JSON.stringify(err?.response?.data ?? err?.message));
+  }
 }
 
 // ─── Media download (for CV uploads) ──────────────────────────────────────
