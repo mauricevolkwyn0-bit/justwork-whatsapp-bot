@@ -1,8 +1,8 @@
 import {
   sendTextMessage,
-  sendImageMessage,
   sendButtonMessage,
   sendListMessage,
+  sendInteractiveWithImageHeader,
   downloadMediaBuffer,
 } from "./whatsapp.service";
 import { updateSession } from "../services/session.service";
@@ -16,7 +16,6 @@ import {
 } from "../services/lookup.service";
 import { saveCandidateFromSession } from "../services/candidate.service";
 import { parseSAID } from "../utils/id.validator";
-import { supabase } from "../services/supabase.service";
 import { BotSession, BotStep, SessionData, WhatsAppMessage } from "../types/bot";
 
 const WELCOME_IMAGE_URL =
@@ -52,15 +51,12 @@ function getMessageLabel(msg: WhatsAppMessage): string {
 export async function handleStart(session: BotSession, _msg: WhatsAppMessage) {
   const { phone_number } = session;
 
-  // Send text instead of image for now
-  await sendTextMessage(
+  await sendInteractiveWithImageHeader(
     phone_number,
-    `👋 Welcome to *JustWork*!\n\nLooking for work? We'll connect you with multiple recruitment companies.\n\n*Don't go looking for work — let the work come to you.*\n\nWhen a recruiter posts a job that fits your qualifications, we send it straight to you. 🚀\n\nReady to start? Tap Register below!`
+    WELCOME_IMAGE_URL,
+    `👋 Welcome to *JustWork*!\n\nLooking for work? We'll connect you with multiple recruitment companies.\n\n*Don't go looking for work — let the work come to you.*\n\nWhen a recruiter posts a job that fits your qualifications, we send it straight to you. 🚀\n\nReady to start? Tap Register below!`,
+    [{ id: "REGISTER", title: "Register" }]
   );
-
-  await sendButtonMessage(phone_number, "Ready to join the JustWork network?", [
-    { id: "REGISTER", title: "Register" },
-  ]);
 
   await updateSession(phone_number, BotStep.WELCOME_SENT, session.session_data);
 }
@@ -215,7 +211,6 @@ export async function handleAskPhoneConfirm(session: BotSession, msg: WhatsAppMe
 
   let phone = session.phone_number;
   if (reply !== "PHONE_YES") {
-    // They typed a custom number
     const cleaned = getMessageLabel(msg).replace(/\s/g, "");
     if (!/^\+?\d{9,15}$/.test(cleaned)) {
       await sendTextMessage(
@@ -387,7 +382,7 @@ export async function handleAskIndustry(session: BotSession, msg: WhatsAppMessag
 export async function handleAskJobTitle(session: BotSession, msg: WhatsAppMessage) {
   const reply = getMessageText(msg);
   if (!reply.startsWith("JT_")) {
-    await (session.phone_number, "Please select your job title from the list.");
+    await sendTextMessage(session.phone_number, "Please select your job title from the list.");
     return;
   }
 
@@ -434,10 +429,9 @@ export async function handleJobTitleDone(session: BotSession) {
       { id: "EXP_1", title: "1–3 years" },
     ]
   );
-  // Send a second button message for more options
   await sendButtonMessage(
     session.phone_number,
-    "Or:",
+    "Or select:",
     [
       { id: "EXP_3", title: "3–5 years" },
       { id: "EXP_5", title: "5+ years" },
@@ -457,7 +451,7 @@ export async function handleAskExperience(session: BotSession, msg: WhatsAppMess
     EXP_5: 5,
   };
 
-  if (!expMap.hasOwnProperty(reply)) {
+  if (!Object.prototype.hasOwnProperty.call(expMap, reply)) {
     await sendButtonMessage(session.phone_number, "Please select your years of experience:", [
       { id: "EXP_0", title: "Less than 1 year" },
       { id: "EXP_1", title: "1–3 years" },
@@ -574,53 +568,28 @@ export async function handleAskDriversLicenseCode(
 export async function handleAskCvUpload(session: BotSession, msg: WhatsAppMessage) {
   const reply = getMessageText(msg);
 
-  // User tapped "Skip"
   if (reply === "CV_SKIP") {
     return await proceedToCriminalRecord(session);
   }
 
-  // User sent a document or image
   if (msg.type === "document" || msg.type === "image") {
     const mediaId = msg.document?.id ?? msg.image?.id ?? "";
     const filename = msg.document?.filename ?? `cv_${Date.now()}.jpg`;
 
     try {
-      const fileBuffer = await downloadMediaBuffer(mediaId);
-      const mimeType = msg.document?.mime_type ?? "image/jpeg";
-      const path = `candidates/cv/${session.phone_number}/${filename}`;
-
-      await supabase.storage
-        .from("candidate-documents")
-        .upload(path, fileBuffer, { contentType: mimeType, upsert: true });
-
-      const { data: urlData } = supabase.storage
-        .from("candidate-documents")
-        .getPublicUrl(path);
-
-      // Save document reference (will link to candidate_id after registration)
-      const { data: docData } = await supabase
-        .from("candidate_documents")
-        .insert({
-          document_type: "CV",
-          file_url: urlData.publicUrl,
-          file_name: filename,
-          file_size_kb: Math.round(fileBuffer.length / 1024),
-        })
-        .select("document_id")
-        .single();
+      // CV upload — Supabase storage disabled, log and skip
+      console.log("[CV] Upload skipped (Supabase disabled), filename:", filename, "mediaId:", mediaId);
+      void downloadMediaBuffer(mediaId); // fire and forget just to test
 
       await updateSession(
         session.phone_number,
         BotStep.ASK_CRIMINAL_RECORD,
-        {
-          ...session.session_data,
-          cv_document_id: docData?.document_id,
-        }
+        { ...session.session_data, cv_document_id: "mock-cv-id" }
       );
 
       await sendButtonMessage(
         session.phone_number,
-        `✅ CV uploaded!\n\n🔍 *Almost done!*\n\nDo you have a criminal record?`,
+        `✅ CV received!\n\n🔍 *Almost done!*\n\nDo you have a criminal record?`,
         [
           { id: "CR_YES", title: "Yes" },
           { id: "CR_NO", title: "No" },
@@ -629,16 +598,15 @@ export async function handleAskCvUpload(session: BotSession, msg: WhatsAppMessag
     } catch {
       await sendTextMessage(
         session.phone_number,
-        "Sorry, we couldn't upload your CV. Please try again or tap *Skip*."
+        "Sorry, we couldn't process your CV. Please try again or tap *Skip*."
       );
-      await sendButtonMessage(session.phone_number, "Would you like to try again?", [
+      await sendButtonMessage(session.phone_number, "Would you like to skip?", [
         { id: "CV_SKIP", title: "Skip for now" },
       ]);
     }
     return;
   }
 
-  // They tapped "Upload CV" — prompt them to actually send the file
   if (reply === "CV_UPLOAD") {
     await sendTextMessage(
       session.phone_number,

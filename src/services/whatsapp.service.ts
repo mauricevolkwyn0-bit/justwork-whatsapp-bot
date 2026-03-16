@@ -12,6 +12,34 @@ const getHeaders = () => ({
   "Content-Type": "application/json",
 });
 
+export async function sendInteractiveWithImageHeader(
+  to: string,
+  imageUrl: string,
+  body: string,
+  buttons: Array<{ id: string; title: string }>
+): Promise<void> {
+  console.log("[WhatsApp] sendInteractiveWithImageHeader to:", to);
+  await postToWhatsApp({
+    messaging_product: "whatsapp",
+    to,
+    type: "interactive",
+    interactive: {
+      type: "button",
+      header: {
+        type: "image",
+        image: { link: imageUrl },
+      },
+      body: { text: body },
+      action: {
+        buttons: buttons.map((b) => ({
+          type: "reply",
+          reply: { id: b.id, title: b.title },
+        })),
+      },
+    },
+  });
+}
+
 async function postToWhatsApp(payload: object): Promise<void> {
   const res = await fetch(getUrl(), {
     method: "POST",
