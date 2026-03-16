@@ -61,7 +61,7 @@ async function processMessage(msg: WhatsAppMessage): Promise<void> {
   console.log(`[Bot] Processing message from ${phoneNumber} — type: ${msg.type}`);
 
   try {
-    // Log to whatsapp_message_logs
+    console.log("[Bot] Inserting message log...");
     await supabase.from("whatsapp_message_logs").insert({
       phone_number: phoneNumber,
       direction: "INBOUND",
@@ -72,11 +72,13 @@ async function processMessage(msg: WhatsAppMessage): Promise<void> {
           : JSON.stringify(msg.interactive ?? msg.document ?? msg.image),
     });
 
+    console.log("[Bot] Getting session...");
     const session = await getOrCreateSession(phoneNumber);
-    console.log(`[Bot] Session step for ${phoneNumber}: ${session.current_step}`);
+    console.log(`[Bot] Session step: ${session.current_step}`);
 
+    console.log("[Bot] Routing message...");
     await routeMessage(session, msg);
-    console.log(`[Bot] routeMessage completed for ${phoneNumber}`);
+    console.log("[Bot] Done.");
   } catch (err) {
     console.error(`[Webhook] Error processing message from ${phoneNumber}:`, err);
   }
