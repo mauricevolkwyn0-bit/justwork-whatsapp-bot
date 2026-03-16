@@ -19,11 +19,18 @@ async function postToWhatsApp(payload: object): Promise<void> {
     body: JSON.stringify(payload),
   });
 
-  if (!res.ok) {
-    const err = await res.text();
-    console.error("[WhatsApp] API error:", err);
-  } else {
-    console.log("[WhatsApp] Message sent successfully, status:", res.status);
+  const text = await res.text();
+
+  try {
+    const data = JSON.parse(text);
+
+    if (!res.ok) {
+      console.error("[WhatsApp] API error:", data);
+    } else {
+      console.log("[WhatsApp] API success:", data);
+    }
+  } catch {
+    console.error("[WhatsApp] Unexpected response:", text);
   }
 }
 

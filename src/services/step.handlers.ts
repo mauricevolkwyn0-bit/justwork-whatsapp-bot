@@ -387,7 +387,7 @@ export async function handleAskIndustry(session: BotSession, msg: WhatsAppMessag
 export async function handleAskJobTitle(session: BotSession, msg: WhatsAppMessage) {
   const reply = getMessageText(msg);
   if (!reply.startsWith("JT_")) {
-    await sendTextMessage(session.phone_number, "Please select your job title from the list.");
+    await (session.phone_number, "Please select your job title from the list.");
     return;
   }
 
