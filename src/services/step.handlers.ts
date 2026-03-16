@@ -291,9 +291,31 @@ export async function handleAskProvince(session: BotSession, msg: WhatsAppMessag
   const provinceId = parseInt(reply.replace("PROV_", ""), 10);
   const provinceName = getMessageLabel(msg);
 
-  await sendTextMessage(
+  // Send city list based on selected province
+  const citiesByProvince: Record<string, string[]> = {
+    "Gauteng": ["Johannesburg", "Pretoria", "Soweto", "Ekurhuleni", "Centurion", "Sandton", "Midrand", "Roodepoort"],
+    "Western Cape": ["Cape Town", "Stellenbosch", "George", "Paarl", "Worcester", "Knysna", "Mossel Bay", "Hermanus"],
+    "KwaZulu-Natal": ["Durban", "Pietermaritzburg", "Richards Bay", "Newcastle", "Empangeni", "Umhlanga", "Ballito", "Port Shepstone"],
+    "Eastern Cape": ["Port Elizabeth", "East London", "Mthatha", "Queenstown", "King William's Town", "Grahamstown", "Uitenhage", "Bhisho"],
+    "Limpopo": ["Polokwane", "Tzaneen", "Phalaborwa", "Louis Trichardt", "Mokopane", "Bela-Bela", "Thabazimbi", "Giyani"],
+    "Mpumalanga": ["Nelspruit", "Witbank", "Middelburg", "Secunda", "Standerton", "Barberton", "White River", "Hazyview"],
+    "Free State": ["Bloemfontein", "Welkom", "Bethlehem", "Sasolburg", "Kroonstad", "Phuthaditjhaba", "Virginia", "Parys"],
+    "North West": ["Rustenburg", "Mahikeng", "Klerksdorp", "Potchefstroom", "Brits", "Lichtenburg", "Vryburg", "Wolmaransstad"],
+    "Northern Cape": ["Kimberley", "Upington", "Springbok", "De Aar", "Kuruman", "Kathu", "Calvinia", "Colesberg"],
+  };
+
+  const cities = citiesByProvince[provinceName] ?? ["Other"];
+
+  await sendListMessage(
     session.phone_number,
-    `Great, *${provinceName}*! 📍\n\nWhich city or town are you based in? (e.g. _Johannesburg_, _Cape Town_):`
+    `📍 *${provinceName}*\n\nWhich city or town are you based in?`,
+    "Select city",
+    [
+      {
+        title: "Cities & Towns",
+        rows: cities.map((city, i) => ({ id: `CITY_${i}_${city}`, title: city })),
+      },
+    ]
   );
 
   await updateSession(
@@ -310,11 +332,21 @@ export async function handleAskProvince(session: BotSession, msg: WhatsAppMessag
 // ─── STEP: ASK_CITY ───────────────────────────────────────────────────────
 
 export async function handleAskCity(session: BotSession, msg: WhatsAppMessage) {
-  const city = getMessageLabel(msg).trim();
+  const reply = getMessageText(msg);
+  
+  // Handle list selection
+  let city: string;
+  if (reply.startsWith("CITY_")) {
+    city = getMessageLabel(msg);
+  } else {
+    // Fallback: accept free text too
+    city = getMessageLabel(msg).trim();
+  }
+
   if (!city || city.length < 2) {
     await sendTextMessage(
       session.phone_number,
-      "Please enter the name of your city or town:"
+      "Please select your city from the list."
     );
     return;
   }
