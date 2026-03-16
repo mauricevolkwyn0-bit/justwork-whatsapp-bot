@@ -6,10 +6,13 @@ export async function getSession(phoneNumber: string): Promise<BotSession | null
     .from("bot_sessions")
     .select("*")
     .eq("phone_number", phoneNumber)
-    .single();
+    .maybeSingle(); // ← change .single() to .maybeSingle()
 
-  if (error || !data) return null;
-  return data as BotSession;
+  if (error) {
+    console.error("[Session] getSession error:", error.message);
+    return null;
+  }
+  return data as BotSession | null;
 }
 
 export async function createSession(phoneNumber: string): Promise<BotSession> {
@@ -23,7 +26,10 @@ export async function createSession(phoneNumber: string): Promise<BotSession> {
     .select()
     .single();
 
-  if (error || !data) throw new Error(`Failed to create session: ${error?.message}`);
+  if (error || !data) {
+    console.error("[Session] createSession error:", error?.message);
+    throw new Error(`Failed to create session: ${error?.message}`);
+  }
   return data as BotSession;
 }
 
