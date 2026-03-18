@@ -337,7 +337,7 @@ export async function handleAskIndustry(session: BotSession, msg: WhatsAppMessag
     await updateSession(session.phone_number, BotStep.ASK_SUB_INDUSTRY, updatedData);
   } else {
     await updateSession(session.phone_number, BotStep.ASK_JOB_TITLE, updatedData);
-    await showJobTitles(session.phone_number, industryId); 
+    await showJobTitles(session.phone_number, industryId);
   }
 }
 
@@ -371,7 +371,7 @@ export async function handleAskSubIndustry(session: BotSession, msg: WhatsAppMes
 
 async function showJobTitles(phoneNumber: string, industryId?: number, offset: number = 0) {
   const allJobTitles = await getJobTitles(industryId);
-  
+
   if (allJobTitles.length === 0) {
     await sendTextMessage(phoneNumber, `🧑‍💼 *Job Title*\n\nPlease type your job title or the role you are looking for:`);
     return;
@@ -489,12 +489,23 @@ export async function handleAskSkills(session: BotSession, msg: WhatsAppMessage)
 }
 
 async function proceedToExperience(session: BotSession) {
-  await sendButtonMessage(session.phone_number, `⏳ *Experience*\n\nHow many years of work experience do you have?`, [
-    { id: "EXP_0", title: "Less than 1 year" },
-    { id: "EXP_1", title: "1–3 years" },
-    { id: "EXP_3", title: "3–5 years" },
-  ]);
-  await sendButtonMessage(session.phone_number, "Or select:", [{ id: "EXP_5", title: "5+ years" }]);
+  await safeListMessage(
+    session.phone_number,
+    `⏳ *Experience*\n\nHow many years of work experience do you have?`,
+    "Select experience",
+    "Years of Experience",
+    [
+      { id: "EXP_0", title: "No experience" },
+      { id: "EXP_LT1", title: "Less than 1 year" },
+      { id: "EXP_1", title: "1–2 years" },
+      { id: "EXP_3", title: "3–5 years" },
+      { id: "EXP_5", title: "5–7 years" },
+      { id: "EXP_7", title: "7–10 years" },
+      { id: "EXP_10", title: "10–15 years" },
+      { id: "EXP_15", title: "15+ years" },
+    ],
+    "ASK_EXPERIENCE"
+  );
   await updateSession(session.phone_number, BotStep.ASK_EXPERIENCE, session.session_data);
 }
 
@@ -502,13 +513,34 @@ async function proceedToExperience(session: BotSession) {
 
 export async function handleAskExperience(session: BotSession, msg: WhatsAppMessage) {
   const reply = getMessageText(msg);
-  const expMap: Record<string, number> = { EXP_0: 0, EXP_1: 1, EXP_3: 3, EXP_5: 5 };
+  const expMap: Record<string, number> = {
+    EXP_0: 0,
+    EXP_LT1: 0,
+    EXP_1: 1,
+    EXP_3: 3,
+    EXP_5: 5,
+    EXP_7: 7,
+    EXP_10: 10,
+    EXP_15: 15,
+  };
   if (!Object.prototype.hasOwnProperty.call(expMap, reply)) {
-    await sendButtonMessage(session.phone_number, "Please select your years of experience:", [
-      { id: "EXP_0", title: "Less than 1 year" },
-      { id: "EXP_1", title: "1–3 years" },
-      { id: "EXP_3", title: "3–5 years" },
-    ]);
+    await safeListMessage(
+      session.phone_number,
+      "Please select your years of experience from the list:",
+      "Select experience",
+      "Years of Experience",
+      [
+        { id: "EXP_0", title: "No experience" },
+        { id: "EXP_LT1", title: "Less than 1 year" },
+        { id: "EXP_1", title: "1–2 years" },
+        { id: "EXP_3", title: "3–5 years" },
+        { id: "EXP_5", title: "5–7 years" },
+        { id: "EXP_7", title: "7–10 years" },
+        { id: "EXP_10", title: "10–15 years" },
+        { id: "EXP_15", title: "15+ years" },
+      ],
+      "ASK_EXPERIENCE_reprompt"
+    );
     return;
   }
   await safeListMessage(session.phone_number, `🎓 *Education Level*\n\nWhat is your highest level of education?`, "Select education",
@@ -516,7 +548,7 @@ export async function handleAskExperience(session: BotSession, msg: WhatsAppMess
       { id: "EDU_MATRIC", title: "Matric / Grade 12" },
       { id: "EDU_DIPLOMA", title: "Diploma" },
       { id: "EDU_DEGREE", title: "Degree" },
-      { id: "EDU_TRADE", title: "Trade / Artisan Certificate" },
+      { id: "EDU_TRADE", title: "Trade / Artisan Cert." },
       { id: "EDU_POSTGRAD", title: "Postgraduate" },
       { id: "EDU_NONE", title: "No formal qualification" },
     ], "ASK_EXPERIENCE"
@@ -551,10 +583,10 @@ export async function handleAskAvailability(session: BotSession, msg: WhatsAppMe
   if (reply === "EMP_YES") {
     await safeListMessage(session.phone_number, `📅 *Notice Period*\n\nHow much notice do you need to give your current employer?`, "Select notice period",
       "Notice Period", [
-        { id: "AVAIL_IMMEDIATE", title: "Immediately" }, { id: "AVAIL_1WEEK", title: "1 week" },
-        { id: "AVAIL_2WEEKS", title: "2 weeks" }, { id: "AVAIL_1MONTH", title: "1 month" },
-        { id: "AVAIL_OTHER", title: "Longer than 1 month" },
-      ], "ASK_AVAILABILITY_employed"
+      { id: "AVAIL_IMMEDIATE", title: "Immediately" }, { id: "AVAIL_1WEEK", title: "1 week" },
+      { id: "AVAIL_2WEEKS", title: "2 weeks" }, { id: "AVAIL_1MONTH", title: "1 month" },
+      { id: "AVAIL_OTHER", title: "Longer than 1 month" },
+    ], "ASK_AVAILABILITY_employed"
     );
     await updateSession(session.phone_number, BotStep.ASK_AVAILABILITY, { ...session.session_data, employment_status: "Employed" });
     return;
@@ -562,10 +594,10 @@ export async function handleAskAvailability(session: BotSession, msg: WhatsAppMe
   if (reply === "EMP_NO") {
     await safeListMessage(session.phone_number, `📅 *Start Date*\n\nWhen can you start working?`, "Select start date",
       "Availability", [
-        { id: "AVAIL_IMMEDIATE", title: "Immediately" }, { id: "AVAIL_1WEEK", title: "Within 1 week" },
-        { id: "AVAIL_2WEEKS", title: "Within 2 weeks" }, { id: "AVAIL_1MONTH", title: "Within 1 month" },
-        { id: "AVAIL_OTHER", title: "Longer than 1 month" },
-      ], "ASK_AVAILABILITY_unemployed"
+      { id: "AVAIL_IMMEDIATE", title: "Immediately" }, { id: "AVAIL_1WEEK", title: "Within 1 week" },
+      { id: "AVAIL_2WEEKS", title: "Within 2 weeks" }, { id: "AVAIL_1MONTH", title: "Within 1 month" },
+      { id: "AVAIL_OTHER", title: "Longer than 1 month" },
+    ], "ASK_AVAILABILITY_unemployed"
     );
     await updateSession(session.phone_number, BotStep.ASK_AVAILABILITY, { ...session.session_data, employment_status: "Unemployed" });
     return;
@@ -583,11 +615,11 @@ export async function handleAskAvailability(session: BotSession, msg: WhatsAppMe
   }
   await safeListMessage(session.phone_number, `💰 *Expected Salary*\n\nWhat is your expected monthly salary?`, "Select range",
     "Monthly Salary (ZAR)", [
-      { id: "SAL_5", title: "R5,000 – R10,000" }, { id: "SAL_10", title: "R10,000 – R15,000" },
-      { id: "SAL_15", title: "R15,000 – R25,000" }, { id: "SAL_25", title: "R25,000 – R40,000" },
-      { id: "SAL_40", title: "R40,000 – R60,000" }, { id: "SAL_60", title: "R60,000+" },
-      { id: "SAL_NEG", title: "Negotiable" },
-    ], "ASK_AVAILABILITY_salary"
+    { id: "SAL_5", title: "R5,000 – R10,000" }, { id: "SAL_10", title: "R10,000 – R15,000" },
+    { id: "SAL_15", title: "R15,000 – R25,000" }, { id: "SAL_25", title: "R25,000 – R40,000" },
+    { id: "SAL_40", title: "R40,000 – R60,000" }, { id: "SAL_60", title: "R60,000+" },
+    { id: "SAL_NEG", title: "Negotiable" },
+  ], "ASK_AVAILABILITY_salary"
   );
   await updateSession(session.phone_number, BotStep.ASK_SALARY, { ...session.session_data, availability });
 }
@@ -765,7 +797,16 @@ export async function handleAskDismissal(session: BotSession, msg: WhatsAppMessa
 // ─── STEP 24: REVIEW SUMMARY ──────────────────────────────────────────────
 
 async function sendReviewSummary(session: BotSession, data: SessionData) {
-  const expLabel = data.years_experience === 0 ? "Less than 1 year" : `${data.years_experience}+ years`;
+  const expLabels: Record<number, string> = {
+    0: "No experience / Less than 1 year",
+    1: "1–2 years",
+    3: "3–5 years",
+    5: "5–7 years",
+    7: "7–10 years",
+    10: "10–15 years",
+    15: "15+ years",
+  };
+  const expLabel = expLabels[data.years_experience ?? 0] ?? `${data.years_experience}+ years`;
   const lines = [
     `📋 *Registration Summary*\n`,
     `👤 *Name:* ${data.name}`,
