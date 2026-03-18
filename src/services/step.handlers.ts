@@ -273,6 +273,16 @@ export async function handleAskAddress(session: BotSession, msg: WhatsAppMessage
   const input = getMessageLabel(msg).trim();
   const address = input.toLowerCase() === "skip" || input === "" ? undefined : input;
   const industries = await getIndustries();
+  if (!industries || industries.length === 0) {
+    console.error("[FLOW] No industries found");
+
+    await sendTextMessage(
+      session.phone_number,
+      "⚠️ We're having trouble loading industries right now. Please try again later."
+    );
+
+    return;
+  }
   const chunks = chunkArray(industries, 9);
   const sections = chunks.map((chunk, i) => ({
     title: i === 0 ? "Industries" : `Industries (${i + 1})`,
@@ -418,14 +428,16 @@ export async function handleAskExperience(session: BotSession, msg: WhatsAppMess
     return;
   }
   await safeListMessage(session.phone_number, `🎓 *Education Level*\n\nWhat is your highest level of education?`, "Select education",
-    [{ title: "Education Levels", rows: [
-      { id: "EDU_MATRIC", title: "Matric / Grade 12" },
-      { id: "EDU_DIPLOMA", title: "Diploma" },
-      { id: "EDU_DEGREE", title: "Degree" },
-      { id: "EDU_TRADE", title: "Trade / Artisan Certificate" },
-      { id: "EDU_POSTGRAD", title: "Postgraduate" },
-      { id: "EDU_NONE", title: "No formal qualification" },
-    ]}], "ASK_EXPERIENCE"
+    [{
+      title: "Education Levels", rows: [
+        { id: "EDU_MATRIC", title: "Matric / Grade 12" },
+        { id: "EDU_DIPLOMA", title: "Diploma" },
+        { id: "EDU_DEGREE", title: "Degree" },
+        { id: "EDU_TRADE", title: "Trade / Artisan Certificate" },
+        { id: "EDU_POSTGRAD", title: "Postgraduate" },
+        { id: "EDU_NONE", title: "No formal qualification" },
+      ]
+    }], "ASK_EXPERIENCE"
   );
   await updateSession(session.phone_number, BotStep.ASK_EDUCATION, { ...session.session_data, years_experience: expMap[reply] });
 }
@@ -456,22 +468,26 @@ export async function handleAskAvailability(session: BotSession, msg: WhatsAppMe
   const reply = getMessageText(msg);
   if (reply === "EMP_YES") {
     await safeListMessage(session.phone_number, `📅 *Notice Period*\n\nHow much notice do you need to give your current employer?`, "Select notice period",
-      [{ title: "Notice Period", rows: [
-        { id: "AVAIL_IMMEDIATE", title: "Immediately" }, { id: "AVAIL_1WEEK", title: "1 week" },
-        { id: "AVAIL_2WEEKS", title: "2 weeks" }, { id: "AVAIL_1MONTH", title: "1 month" },
-        { id: "AVAIL_OTHER", title: "Longer than 1 month" },
-      ]}], "ASK_AVAILABILITY_employed"
+      [{
+        title: "Notice Period", rows: [
+          { id: "AVAIL_IMMEDIATE", title: "Immediately" }, { id: "AVAIL_1WEEK", title: "1 week" },
+          { id: "AVAIL_2WEEKS", title: "2 weeks" }, { id: "AVAIL_1MONTH", title: "1 month" },
+          { id: "AVAIL_OTHER", title: "Longer than 1 month" },
+        ]
+      }], "ASK_AVAILABILITY_employed"
     );
     await updateSession(session.phone_number, BotStep.ASK_AVAILABILITY, { ...session.session_data, employment_status: "Employed" });
     return;
   }
   if (reply === "EMP_NO") {
     await safeListMessage(session.phone_number, `📅 *Start Date*\n\nWhen can you start working?`, "Select start date",
-      [{ title: "Availability", rows: [
-        { id: "AVAIL_IMMEDIATE", title: "Immediately" }, { id: "AVAIL_1WEEK", title: "Within 1 week" },
-        { id: "AVAIL_2WEEKS", title: "Within 2 weeks" }, { id: "AVAIL_1MONTH", title: "Within 1 month" },
-        { id: "AVAIL_OTHER", title: "Longer than 1 month" },
-      ]}], "ASK_AVAILABILITY_unemployed"
+      [{
+        title: "Availability", rows: [
+          { id: "AVAIL_IMMEDIATE", title: "Immediately" }, { id: "AVAIL_1WEEK", title: "Within 1 week" },
+          { id: "AVAIL_2WEEKS", title: "Within 2 weeks" }, { id: "AVAIL_1MONTH", title: "Within 1 month" },
+          { id: "AVAIL_OTHER", title: "Longer than 1 month" },
+        ]
+      }], "ASK_AVAILABILITY_unemployed"
     );
     await updateSession(session.phone_number, BotStep.ASK_AVAILABILITY, { ...session.session_data, employment_status: "Unemployed" });
     return;
@@ -488,12 +504,14 @@ export async function handleAskAvailability(session: BotSession, msg: WhatsAppMe
     return;
   }
   await safeListMessage(session.phone_number, `💰 *Expected Salary*\n\nWhat is your expected monthly salary?`, "Select range",
-    [{ title: "Monthly Salary (ZAR)", rows: [
-      { id: "SAL_5", title: "R5,000 – R10,000" }, { id: "SAL_10", title: "R10,000 – R15,000" },
-      { id: "SAL_15", title: "R15,000 – R25,000" }, { id: "SAL_25", title: "R25,000 – R40,000" },
-      { id: "SAL_40", title: "R40,000 – R60,000" }, { id: "SAL_60", title: "R60,000+" },
-      { id: "SAL_NEG", title: "Negotiable" },
-    ]}], "ASK_AVAILABILITY_salary"
+    [{
+      title: "Monthly Salary (ZAR)", rows: [
+        { id: "SAL_5", title: "R5,000 – R10,000" }, { id: "SAL_10", title: "R10,000 – R15,000" },
+        { id: "SAL_15", title: "R15,000 – R25,000" }, { id: "SAL_25", title: "R25,000 – R40,000" },
+        { id: "SAL_40", title: "R40,000 – R60,000" }, { id: "SAL_60", title: "R60,000+" },
+        { id: "SAL_NEG", title: "Negotiable" },
+      ]
+    }], "ASK_AVAILABILITY_salary"
   );
   await updateSession(session.phone_number, BotStep.ASK_SALARY, { ...session.session_data, availability });
 }

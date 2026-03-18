@@ -14,11 +14,22 @@ export async function getProvinces(): Promise<LookupRow[]> {
 }
 
 export async function getIndustries(): Promise<LookupRow[]> {
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from("industries")
     .select("industry_id, industry_name")
     .order("industry_name");
-  return (data ?? []).map((r) => ({ id: r.industry_id, name: r.industry_name }));
+
+  if (error) {
+    console.error("[DB] industries error:", error);
+    return [];
+  }
+
+  console.log("[DB] industries count:", data?.length);
+
+  return (data ?? []).map((r) => ({
+    id: r.industry_id,
+    name: r.industry_name,
+  }));
 }
 
 // Fixed: now joins on industry_id (integer) instead of industry_name (string)
