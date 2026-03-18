@@ -570,8 +570,8 @@ export async function handleAskEducation(session: BotSession, msg: WhatsAppMessa
     return;
   }
   await sendButtonMessage(session.phone_number, `💼 *Employment Status*\n\nAre you currently employed?`, [
-    { id: "EMP_YES", title: "Yes, currently employed" },
-    { id: "EMP_NO", title: "No, available now" },
+    { id: "EMP_YES", title: "Currently employed" },
+    { id: "EMP_NO", title: "Not employed" },
   ]);
   await updateSession(session.phone_number, BotStep.ASK_AVAILABILITY, { ...session.session_data, education_level });
 }
@@ -660,7 +660,7 @@ export async function handleAskWorkType(session: BotSession, msg: WhatsAppMessag
   const workTypeId = parseInt(reply.replace("JT_TYPE_", ""), 10);
   const workTypeName = getMessageLabel(msg);
   await sendButtonMessage(session.phone_number, `🗺️ *Relocation*\n\nAre you willing to relocate for work?`, [
-    { id: "RELOCATE_YES", title: "Yes, willing to relocate" },
+    { id: "RELOCATE_YES", title: "Yes, I'll relocate" },
     { id: "RELOCATE_NO", title: "No, staying local" },
   ]);
   await updateSession(session.phone_number, BotStep.ASK_RELOCATE, { ...session.session_data, work_type_id: workTypeId, work_type_name: workTypeName });
