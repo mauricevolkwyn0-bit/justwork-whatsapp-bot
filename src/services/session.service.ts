@@ -21,6 +21,7 @@ export async function createSession(phoneNumber: string): Promise<BotSession> {
       phone_number: phoneNumber,
       current_step: BotStep.START,
       session_data: {},
+      popi_status: "PENDING",
     })
     .select()
     .single();
@@ -39,7 +40,22 @@ export async function updateSession(
     session_data: sessionData,
     last_active_at: new Date().toISOString(),
   };
-  if (candidateId) update.candidate_id = candidateId;
+
+  if (candidateId) {
+    update.candidate_id = candidateId;
+  }
+
+  // Write POPIA audit fields when user declines
+  if (step === BotStep.DECLINED) {
+    update.popi_status = "DECLINED";
+    update.popi_declined_at = new Date().toISOString();
+  }
+
+  // Mark POPIA as accepted when flow completes
+  if (step === BotStep.COMPLETE) {
+    update.popi_status = "ACCEPTED";
+  }
+
   const { error } = await supabase
     .from("bot_sessions")
     .update(update)

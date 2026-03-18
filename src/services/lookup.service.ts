@@ -21,14 +21,14 @@ export async function getIndustries(): Promise<LookupRow[]> {
   return (data ?? []).map((r) => ({ id: r.industry_id, name: r.industry_name }));
 }
 
-export async function getSubIndustries(industryName: string): Promise<LookupRow[]> {
+// Fixed: now joins on industry_id (integer) instead of industry_name (string)
+export async function getSubIndustries(industryId: number): Promise<LookupRow[]> {
   const { data } = await supabase
     .from("sub_industries")
     .select("sub_industry_id, sub_industry_name")
-    .eq("industry_name", industryName)
+    .eq("industry_id", industryId)
     .order("sub_industry_name");
-
-  return (data ?? []).map(r => ({ id: r.sub_industry_id, name: r.sub_industry_name }));
+  return (data ?? []).map((r) => ({ id: r.sub_industry_id, name: r.sub_industry_name }));
 }
 
 export async function getJobTitles(): Promise<LookupRow[]> {
@@ -37,6 +37,25 @@ export async function getJobTitles(): Promise<LookupRow[]> {
     .select("job_title_id, title_name")
     .order("title_name");
   return (data ?? []).map((r) => ({ id: r.job_title_id, name: r.title_name }));
+}
+
+// New: fetch skills filtered by industry_id
+export async function getSkillsByIndustry(industryId: number): Promise<LookupRow[]> {
+  const { data } = await supabase
+    .from("skills")
+    .select("skill_id, skill_name")
+    .eq("industry_id", industryId)
+    .order("skill_name");
+  return (data ?? []).map((r) => ({ id: r.skill_id, name: r.skill_name }));
+}
+
+// New: fetch work/job types from job_types table
+export async function getJobTypes(): Promise<LookupRow[]> {
+  const { data } = await supabase
+    .from("job_types")
+    .select("job_type_id, job_type_name")
+    .order("job_type_name");
+  return (data ?? []).map((r) => ({ id: r.job_type_id, name: r.job_type_name }));
 }
 
 export async function getDriversLicenseCodes(): Promise<LookupRow[]> {
