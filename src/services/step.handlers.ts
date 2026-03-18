@@ -282,39 +282,57 @@ export async function handleAskAddress(session: BotSession, msg: WhatsAppMessage
   const address = input.toLowerCase() === "skip" || input === "" ? undefined : input;
   const industries = await getIndustries();
   if (!industries || industries.length === 0) {
-    console.error("[FLOW] No industries found in DB");
-    await sendTextMessage(session.phone_number, "⚠️ We're having trouble loading the industry list. Please try again in a moment.");
+    await sendTextMessage(session.phone_number, "⚠️ We're having trouble loading the industry list. Please try again.");
     return;
   }
-  await safeListMessage(
-    session.phone_number,
-    `💼 *Industry*\n\nWhich industry do you work in?\n\n_Showing first 10 — type your industry if not listed._`,
-    "Select industry", "Industries",
-    industries.map((ind) => ({ id: `IND_${ind.id}`, title: ind.name })),
-    "ASK_ADDRESS"
-  );
+  await sendIndustryList(session.phone_number, industries, 0);
   await updateSession(session.phone_number, BotStep.ASK_INDUSTRY, { ...session.session_data, address });
+}
+
+// ─── Helper: paginated industry list ──────────────────────────────────────
+
+async function sendIndustryList(phoneNumber: string, industries: Array<{ id: number; name: string }>, offset: number) {
+  const page = industries.slice(offset, offset + 9);
+  const hasMore = industries.length > offset + 9;
+
+  const rows = page.map((ind) => ({
+    id: `IND_${ind.id}`,
+    title: ind.name.length > 24 ? ind.name.slice(0, 21) + "..." : ind.name,
+  }));
+
+  if (hasMore) {
+    rows.push({ id: `IND_MORE_${offset + 9}`, title: "More industries..." });
+  }
+
+  await safeListMessage(phoneNumber, `💼 *Industry*\n\nWhich industry do you work in?`, "Select industry", "Industries", rows, "sendIndustryList");
 }
 
 // ─── STEP 10: ASK_INDUSTRY ────────────────────────────────────────────────
 
 export async function handleAskIndustry(session: BotSession, msg: WhatsAppMessage) {
   const reply = getMessageText(msg);
+
+  // Pagination — user tapped "More industries..."
+  if (reply.startsWith("IND_MORE_")) {
+    const offset = parseInt(reply.replace("IND_MORE_", ""), 10);
+    const industries = await getIndustries();
+    await sendIndustryList(session.phone_number, industries, offset);
+    return;
+  }
+
   if (!reply.startsWith("IND_")) {
     await sendTextMessage(session.phone_number, "Please select your industry from the list.");
     return;
   }
+
   const industryId = parseInt(reply.replace("IND_", ""), 10);
   const industryName = getMessageLabel(msg);
   const updatedData = { ...session.session_data, industry_id: industryId, industry_name: industryName };
+
   const subIndustries = await getSubIndustries(industryId);
   if (subIndustries.length > 0) {
-    await safeListMessage(
-      session.phone_number,
-      `💼 Which area of *${industryName}* do you specialise in?`,
-      "Select area", industryName,
-      subIndustries.map((sub) => ({ id: `SUB_${sub.id}`, title: sub.name })),
-      "ASK_INDUSTRY_sub"
+    await safeListMessage(session.phone_number, `💼 Which area of *${industryName}* do you specialise in?`, "Select area", industryName,
+      subIndustries.map((sub) => ({ id: `SUB_${sub.id}`, title: sub.name })), "ASK_INDUSTRY_sub"
     );
     await updateSession(session.phone_number, BotStep.ASK_SUB_INDUSTRY, updatedData);
   } else {
