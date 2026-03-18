@@ -369,17 +369,29 @@ export async function handleAskSubIndustry(session: BotSession, msg: WhatsAppMes
   await showJobTitles(session.phone_number, industryId);
 }
 
-async function showJobTitles(phoneNumber: string, industryId?: number) {
-  const jobTitles = await getJobTitles(industryId);
-  if (jobTitles.length === 0) {
+async function showJobTitles(phoneNumber: string, industryId?: number, offset: number = 0) {
+  const allJobTitles = await getJobTitles(industryId);
+  
+  if (allJobTitles.length === 0) {
     await sendTextMessage(phoneNumber, `🧑‍💼 *Job Title*\n\nPlease type your job title or the role you are looking for:`);
     return;
   }
+
+  const page = allJobTitles.slice(offset, offset + 9);
+  const hasMore = allJobTitles.length > offset + 9;
+
+  const rows = page.map((jt) => ({ id: `JT_${jt.id}`, title: jt.name }));
+
+  if (hasMore) {
+    rows.push({ id: `JT_MORE_${offset + 9}`, title: "More job titles..." });
+  }
+
   await safeListMessage(
     phoneNumber,
-    `🧑‍💼 *Job Title*\n\nSelect your job title.\n\n_Showing first 10 — tap Done after selecting._`,
-    "Select job title", "Job Titles",
-    jobTitles.map((jt) => ({ id: `JT_${jt.id}`, title: jt.name })),
+    `🧑‍💼 *Job Title*\n\nSelect your job title.\n\n_Showing ${offset + 1}–${Math.min(offset + 9, allJobTitles.length)} of ${allJobTitles.length} — tap Done after selecting._`,
+    "Select job title",
+    "Job Titles",
+    rows,
     "showJobTitles"
   );
 }
@@ -389,7 +401,14 @@ async function showJobTitles(phoneNumber: string, industryId?: number) {
 export async function handleAskJobTitle(session: BotSession, msg: WhatsAppMessage) {
   const reply = getMessageText(msg);
 
-  // ✅ Handle "Add another title" before the JT_ guard
+  // ✅ Pagination — user tapped "More job titles..."
+  if (reply.startsWith("JT_MORE_")) {
+    const offset = parseInt(reply.replace("JT_MORE_", ""), 10);
+    await showJobTitles(session.phone_number, session.session_data.industry_id, offset);
+    return;
+  }
+
+  // ✅ Add another title
   if (reply === "JT_ADD_MORE") {
     await showJobTitles(session.phone_number, session.session_data.industry_id);
     return;
