@@ -430,9 +430,9 @@ export async function handleAskAddress(session: BotSession, msg: WhatsAppMessage
   const address = input.toLowerCase() === "skip" || input === "" ? undefined : input;
 
   const industries = await getIndustries();
-  const chunks = chunkArray(industries, 10);
+  const chunks = chunkArray(industries, 9);
   const sections = chunks.map((chunk, i) => ({
-    title: i === 0 ? "Industries" : "Industries (cont.)",
+    title: i === 0 ? "Industries" : `Industries (${i + 1})`,
     rows: chunk.map((ind) => ({ id: `IND_${ind.id}`, title: ind.name })),
   }));
 
