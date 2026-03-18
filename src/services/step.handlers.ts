@@ -312,7 +312,7 @@ export async function handleAskIndustry(session: BotSession, msg: WhatsAppMessag
     await safeListMessage(
       session.phone_number,
       `💼 Which area of *${industryName}* do you specialise in?`,
-      "Select specialisation", industryName,
+      "Select area", industryName,
       subIndustries.map((sub) => ({ id: `SUB_${sub.id}`, title: sub.name })),
       "ASK_INDUSTRY_sub"
     );
