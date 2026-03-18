@@ -337,7 +337,7 @@ export async function handleAskIndustry(session: BotSession, msg: WhatsAppMessag
     await updateSession(session.phone_number, BotStep.ASK_SUB_INDUSTRY, updatedData);
   } else {
     await updateSession(session.phone_number, BotStep.ASK_JOB_TITLE, updatedData);
-    await showJobTitles(session.phone_number);
+    await showJobTitles(session.phone_number, industryId); 
   }
 }
 
@@ -349,14 +349,28 @@ export async function handleAskSubIndustry(session: BotSession, msg: WhatsAppMes
     await sendTextMessage(session.phone_number, "Please select your specialisation from the list.");
     return;
   }
+
   const subIndustryId = parseInt(reply.replace("SUB_", ""), 10);
   const subIndustryName = getMessageLabel(msg);
-  await updateSession(session.phone_number, BotStep.ASK_JOB_TITLE, { ...session.session_data, sub_industry_id: subIndustryId, sub_industry_name: subIndustryName });
-  await showJobTitles(session.phone_number);
+  const industryId = session.session_data.industry_id;
+
+  if (!industryId) {
+    console.error("[ASK_SUB_INDUSTRY] Missing industry_id in session:", session.session_data);
+    await sendTextMessage(session.phone_number, "Something went wrong. Please type *Hi* to restart.");
+    return;
+  }
+
+  await updateSession(session.phone_number, BotStep.ASK_JOB_TITLE, {
+    ...session.session_data,
+    sub_industry_id: subIndustryId,
+    sub_industry_name: subIndustryName,
+  });
+
+  await showJobTitles(session.phone_number, industryId);
 }
 
-async function showJobTitles(phoneNumber: string) {
-  const jobTitles = await getJobTitles();
+async function showJobTitles(phoneNumber: string, industryId?: number) {
+  const jobTitles = await getJobTitles(industryId);
   if (jobTitles.length === 0) {
     await sendTextMessage(phoneNumber, `🧑‍💼 *Job Title*\n\nPlease type your job title or the role you are looking for:`);
     return;
@@ -374,16 +388,25 @@ async function showJobTitles(phoneNumber: string) {
 
 export async function handleAskJobTitle(session: BotSession, msg: WhatsAppMessage) {
   const reply = getMessageText(msg);
+
+  // ✅ Handle "Add another title" before the JT_ guard
+  if (reply === "JT_ADD_MORE") {
+    await showJobTitles(session.phone_number, session.session_data.industry_id);
+    return;
+  }
+
   if (!reply.startsWith("JT_")) {
     await sendTextMessage(session.phone_number, "Please select your job title from the list.");
     return;
   }
+
   const jobTitleId = parseInt(reply.replace("JT_", ""), 10);
   const jobTitleName = getMessageLabel(msg);
   const existingIds = session.session_data.job_title_ids ?? [];
   const existingNames = session.session_data.job_title_names ?? [];
   const updatedIds = existingIds.includes(jobTitleId) ? existingIds : [...existingIds, jobTitleId];
   const updatedNames = existingIds.includes(jobTitleId) ? existingNames : [...existingNames, jobTitleName];
+
   await sendButtonMessage(session.phone_number, `Selected: *${updatedNames.join(", ")}*\n\nWould you like to add another job title?`, [
     { id: "JT_ADD_MORE", title: "Add another title" },
     { id: "JT_DONE", title: "Done" },
@@ -410,17 +433,35 @@ export async function handleJobTitleDone(session: BotSession) {
 
 export async function handleAskSkills(session: BotSession, msg: WhatsAppMessage) {
   const reply = getMessageText(msg);
+
+  if (reply === "SKILLS_ADD_MORE") {
+    const industryId = session.session_data.industry_id;
+    const skills = industryId ? await getSkillsByIndustry(industryId) : [];
+    await safeListMessage(
+      session.phone_number,
+      "Select another skill:",
+      "Select skill",
+      "Skills",
+      skills.map((s) => ({ id: `SKILL_${s.id}`, title: s.name })),
+      "SKILLS_ADD_MORE"
+    );
+    return;
+  }
+
   if (reply === "SKILLS_DONE") { await proceedToExperience(session); return; }
+
   if (!reply.startsWith("SKILL_")) {
     await sendTextMessage(session.phone_number, "Please select a skill from the list, or tap *Done* when finished.");
     return;
   }
+
   const skillId = parseInt(reply.replace("SKILL_", ""), 10);
   const skillName = getMessageLabel(msg);
   const existingIds = session.session_data.skill_ids ?? [];
   const existingNames = session.session_data.skill_names ?? [];
   const updatedIds = existingIds.includes(skillId) ? existingIds : [...existingIds, skillId];
   const updatedNames = existingIds.includes(skillId) ? existingNames : [...existingNames, skillName];
+
   await sendButtonMessage(session.phone_number, `Selected: *${updatedNames.join(", ")}*\n\nAdd another skill or tap Done.`, [
     { id: "SKILLS_ADD_MORE", title: "Add another skill" },
     { id: "SKILLS_DONE", title: "Done" },

@@ -42,11 +42,10 @@ export async function getSubIndustries(industryId: number): Promise<LookupRow[]>
   return (data ?? []).map((r) => ({ id: r.sub_industry_id, name: r.sub_industry_name }));
 }
 
-export async function getJobTitles(): Promise<LookupRow[]> {
-  const { data } = await supabase
-    .from("job_titles")
-    .select("job_title_id, title_name")
-    .order("title_name");
+export async function getJobTitles(industryId?: number): Promise<LookupRow[]> {
+  let query = supabase.from("job_titles").select("job_title_id, title_name");
+  if (industryId) query = query.eq("industry_id", industryId);
+  const { data } = await query.order("title_name");
   return (data ?? []).map((r) => ({ id: r.job_title_id, name: r.title_name }));
 }
 

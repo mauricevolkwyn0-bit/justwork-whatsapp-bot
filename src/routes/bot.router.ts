@@ -103,18 +103,6 @@ export async function routeMessage(
       if (text === "JT_DONE") {
         return await handleJobTitleDone(session);
       }
-      if (text === "JT_ADD_MORE") {
-        const { getJobTitles, chunkArray } = await import("../services/lookup.service");
-        const { sendListMessage } = await import("../services/whatsapp.service");
-        const jobTitles = await getJobTitles();
-        const chunks = chunkArray(jobTitles, 9);
-        const sections = chunks.map((chunk, i) => ({
-          title: i === 0 ? "Job Titles" : `Job Titles (${i + 1})`,
-          rows: chunk.map((jt) => ({ id: `JT_${jt.id}`, title: jt.name })),
-        }));
-        await sendListMessage(session.phone_number, "Select another job title:", "Select job title", sections);
-        return;
-      }
       return await handleAskJobTitle(session, msg);
     }
 
