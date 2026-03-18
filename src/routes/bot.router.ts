@@ -42,8 +42,6 @@ export async function routeMessage(
   const { current_step } = session;
   const text = getMessageText(msg);
 
-  // Re-trigger welcome for any greeting mid-flow,
-  // but let COMPLETE and DECLINED handle greetings themselves in the switch
   if (
     current_step !== BotStep.START &&
     current_step !== BotStep.COMPLETE &&
@@ -109,9 +107,9 @@ export async function routeMessage(
         const { getJobTitles, chunkArray } = await import("../services/lookup.service");
         const { sendListMessage } = await import("../services/whatsapp.service");
         const jobTitles = await getJobTitles();
-        const chunks = chunkArray(jobTitles, 10);
+        const chunks = chunkArray(jobTitles, 9);
         const sections = chunks.map((chunk, i) => ({
-          title: i === 0 ? "Job Titles" : "Job Titles (cont.)",
+          title: i === 0 ? "Job Titles" : `Job Titles (${i + 1})`,
           rows: chunk.map((jt) => ({ id: `JT_${jt.id}`, title: jt.name })),
         }));
         await sendListMessage(session.phone_number, "Select another job title:", "Select job title", sections);
@@ -127,9 +125,9 @@ export async function routeMessage(
         const industryId = session.session_data.industry_id;
         if (industryId) {
           const skills = await getSkillsByIndustry(industryId);
-          const chunks = chunkArray(skills, 10);
+          const chunks = chunkArray(skills, 9);
           const sections = chunks.map((chunk, i) => ({
-            title: i === 0 ? "Skills" : "Skills (cont.)",
+            title: i === 0 ? "Skills" : `Skills (${i + 1})`,
             rows: chunk.map((s) => ({ id: `SKILL_${s.id}`, title: s.name })),
           }));
           await sendListMessage(session.phone_number, "Select another skill:", "Select skill", sections);
