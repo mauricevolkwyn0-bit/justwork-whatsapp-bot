@@ -15,7 +15,6 @@ import {
   getJobTypes,
   getDriversLicenseCodes,
   getCriminalOffences,
-  chunkArray,
 } from "../services/lookup.service";
 import { saveCandidateFromSession } from "../services/candidate.service";
 import { BotSession, BotStep, SessionData, WhatsAppMessage } from "../types/bot";
@@ -24,21 +23,25 @@ const WELCOME_IMAGE_URL =
   process.env.JUSTWORK_WELCOME_IMAGE_URL ??
   "https://images.pexels.com/photos/3184360/pexels-photo-3184360.jpeg";
 
-// ─── Safe list sender — logs row counts before sending ────────────────────
+// ─── WhatsApp hard limit: 10 total rows across ALL sections ───────────────
+function limitList(items: Array<{ id: string; title: string }>) {
+  return items.slice(0, 10);
+}
+
 async function safeListMessage(
   phone: string,
   body: string,
   buttonLabel: string,
-  sections: Array<{ title: string; rows: Array<{ id: string; title: string }> }>,
+  title: string,
+  rows: Array<{ id: string; title: string }>,
   caller: string
 ) {
-  const totalRows = sections.reduce((sum, s) => sum + s.rows.length, 0);
-  const maxSection = Math.max(...sections.map((s) => s.rows.length));
-  console.log(`[LIST:${caller}] sections=${sections.length} totalRows=${totalRows} maxSectionRows=${maxSection}`);
-  if (maxSection > 9) {
-    console.error(`[LIST:${caller}] ERROR: section has ${maxSection} rows — exceeds WhatsApp limit of 9`);
+  const limited = rows.slice(0, 10);
+  console.log(`[LIST:${caller}] total=${rows.length} sending=${limited.length}`);
+  if (rows.length > 10) {
+    console.warn(`[LIST:${caller}] WARNING: truncated from ${rows.length} to 10`);
   }
-  return sendListMessage(phone, body, buttonLabel, sections);
+  return sendListMessage(phone, body, buttonLabel, [{ title, rows: limited }]);
 }
 
 function getMessageText(msg: WhatsAppMessage): string {
@@ -142,8 +145,8 @@ export async function handleAskDob(session: BotSession, msg: WhatsAppMessage) {
   await sendButtonMessage(session.phone_number, `⚧ *Gender*\n\nPlease select your gender:`, [
     { id: "GENDER_MALE", title: "Male" },
     { id: "GENDER_FEMALE", title: "Female" },
+    { id: "GENDER_PREFER_NOT", title: "Prefer not to say" },
   ]);
-  await sendButtonMessage(session.phone_number, "Or select:", [{ id: "GENDER_PREFER_NOT", title: "Prefer not to say" }]);
   await updateSession(session.phone_number, BotStep.ASK_GENDER, { ...session.session_data, date_of_birth: dob });
 }
 
@@ -154,15 +157,18 @@ export async function handleAskGender(session: BotSession, msg: WhatsAppMessage)
   const genderMap: Record<string, string> = { GENDER_MALE: "Male", GENDER_FEMALE: "Female", GENDER_PREFER_NOT: "Prefer not to say" };
   const gender = genderMap[reply];
   if (!gender) {
-    await sendButtonMessage(session.phone_number, "Please select your gender:", [{ id: "GENDER_MALE", title: "Male" }, { id: "GENDER_FEMALE", title: "Female" }]);
-    await sendButtonMessage(session.phone_number, "Or select:", [{ id: "GENDER_PREFER_NOT", title: "Prefer not to say" }]);
+    await sendButtonMessage(session.phone_number, "Please select your gender:", [
+      { id: "GENDER_MALE", title: "Male" },
+      { id: "GENDER_FEMALE", title: "Female" },
+      { id: "GENDER_PREFER_NOT", title: "Prefer not to say" },
+    ]);
     return;
   }
-  await sendButtonMessage(session.phone_number, `🌍 *Citizenship*\n\nWhat is your citizenship status?\n(This helps recruiters confirm work eligibility)`, [
+  await sendButtonMessage(session.phone_number, `🌍 *Citizenship*\n\nWhat is your citizenship status?`, [
     { id: "CIT_SA", title: "SA Citizen" },
     { id: "CIT_PR", title: "Permanent Resident" },
+    { id: "CIT_PERMIT", title: "Work Permit" },
   ]);
-  await sendButtonMessage(session.phone_number, "Or select:", [{ id: "CIT_PERMIT", title: "Work Permit" }]);
   await updateSession(session.phone_number, BotStep.ASK_CITIZENSHIP, { ...session.session_data, gender });
 }
 
@@ -173,8 +179,11 @@ export async function handleAskCitizenship(session: BotSession, msg: WhatsAppMes
   const citizenshipMap: Record<string, string> = { CIT_SA: "SA Citizen", CIT_PR: "Permanent Resident", CIT_PERMIT: "Work Permit" };
   const citizenship = citizenshipMap[reply];
   if (!citizenship) {
-    await sendButtonMessage(session.phone_number, "Please select your citizenship status:", [{ id: "CIT_SA", title: "SA Citizen" }, { id: "CIT_PR", title: "Permanent Resident" }]);
-    await sendButtonMessage(session.phone_number, "Or select:", [{ id: "CIT_PERMIT", title: "Work Permit" }]);
+    await sendButtonMessage(session.phone_number, "Please select your citizenship status:", [
+      { id: "CIT_SA", title: "SA Citizen" },
+      { id: "CIT_PR", title: "Permanent Resident" },
+      { id: "CIT_PERMIT", title: "Work Permit" },
+    ]);
     return;
   }
   await sendButtonMessage(session.phone_number, `📱 *Phone Number*\n\nIs this your correct WhatsApp number?\n*${session.phone_number}*`, [
@@ -216,9 +225,8 @@ export async function handleAskEmail(session: BotSession, msg: WhatsAppMessage) 
     return;
   }
   const provinces = await getProvinces();
-  console.log(`[LIST:ASK_EMAIL] provinces count=${provinces.length}`);
   await safeListMessage(session.phone_number, `📍 *Province*\n\nWhich province are you in?`, "Select province",
-    [{ title: "South African Provinces", rows: provinces.map((p) => ({ id: `PROV_${p.id}`, title: p.name })) }], "ASK_EMAIL"
+    "South African Provinces", provinces.map((p) => ({ id: `PROV_${p.id}`, title: p.name })), "ASK_EMAIL"
   );
   await updateSession(session.phone_number, BotStep.ASK_PROVINCE, { ...session.session_data, email });
 }
@@ -230,7 +238,7 @@ export async function handleAskProvince(session: BotSession, msg: WhatsAppMessag
   if (!reply.startsWith("PROV_")) {
     const provinces = await getProvinces();
     await safeListMessage(session.phone_number, "Please select your province from the list:", "Select province",
-      [{ title: "South African Provinces", rows: provinces.map((p) => ({ id: `PROV_${p.id}`, title: p.name })) }], "ASK_PROVINCE_reprompt"
+      "South African Provinces", provinces.map((p) => ({ id: `PROV_${p.id}`, title: p.name })), "ASK_PROVINCE_reprompt"
     );
     return;
   }
@@ -249,7 +257,7 @@ export async function handleAskProvince(session: BotSession, msg: WhatsAppMessag
   };
   const cities = citiesByProvince[provinceName] ?? ["Other"];
   await safeListMessage(session.phone_number, `📍 *${provinceName}*\n\nWhich city or town are you based in?`, "Select city",
-    [{ title: "Cities & Towns", rows: cities.map((city, i) => ({ id: `CITY_${i}_${city}`, title: city })) }], "ASK_PROVINCE"
+    "Cities & Towns", cities.map((city, i) => ({ id: `CITY_${i}_${city}`, title: city })), "ASK_PROVINCE"
   );
   await updateSession(session.phone_number, BotStep.ASK_CITY, { ...session.session_data, province_id: provinceId, province_name: provinceName });
 }
@@ -274,21 +282,17 @@ export async function handleAskAddress(session: BotSession, msg: WhatsAppMessage
   const address = input.toLowerCase() === "skip" || input === "" ? undefined : input;
   const industries = await getIndustries();
   if (!industries || industries.length === 0) {
-    console.error("[FLOW] No industries found");
-
-    await sendTextMessage(
-      session.phone_number,
-      "⚠️ We're having trouble loading industries right now. Please try again later."
-    );
-
+    console.error("[FLOW] No industries found in DB");
+    await sendTextMessage(session.phone_number, "⚠️ We're having trouble loading the industry list. Please try again in a moment.");
     return;
   }
-  const chunks = chunkArray(industries, 9);
-  const sections = chunks.map((chunk, i) => ({
-    title: i === 0 ? "Industries" : `Industries (${i + 1})`,
-    rows: chunk.map((ind) => ({ id: `IND_${ind.id}`, title: ind.name })),
-  }));
-  await safeListMessage(session.phone_number, `💼 *Industry*\n\nWhich industry do you work in?`, "Select industry", sections, "ASK_ADDRESS");
+  await safeListMessage(
+    session.phone_number,
+    `💼 *Industry*\n\nWhich industry do you work in?\n\n_Showing first 10 — type your industry if not listed._`,
+    "Select industry", "Industries",
+    industries.map((ind) => ({ id: `IND_${ind.id}`, title: ind.name })),
+    "ASK_ADDRESS"
+  );
   await updateSession(session.phone_number, BotStep.ASK_INDUSTRY, { ...session.session_data, address });
 }
 
@@ -305,12 +309,13 @@ export async function handleAskIndustry(session: BotSession, msg: WhatsAppMessag
   const updatedData = { ...session.session_data, industry_id: industryId, industry_name: industryName };
   const subIndustries = await getSubIndustries(industryId);
   if (subIndustries.length > 0) {
-    const chunks = chunkArray(subIndustries, 9);
-    const sections = chunks.map((chunk, i) => ({
-      title: i === 0 ? industryName : `${industryName} (${i + 1})`,
-      rows: chunk.map((sub) => ({ id: `SUB_${sub.id}`, title: sub.name })),
-    }));
-    await safeListMessage(session.phone_number, `💼 Which area of *${industryName}* do you specialise in?`, "Select specialisation", sections, "ASK_INDUSTRY_sub");
+    await safeListMessage(
+      session.phone_number,
+      `💼 Which area of *${industryName}* do you specialise in?`,
+      "Select specialisation", industryName,
+      subIndustries.map((sub) => ({ id: `SUB_${sub.id}`, title: sub.name })),
+      "ASK_INDUSTRY_sub"
+    );
     await updateSession(session.phone_number, BotStep.ASK_SUB_INDUSTRY, updatedData);
   } else {
     await updateSession(session.phone_number, BotStep.ASK_JOB_TITLE, updatedData);
@@ -338,12 +343,13 @@ async function showJobTitles(phoneNumber: string) {
     await sendTextMessage(phoneNumber, `🧑‍💼 *Job Title*\n\nPlease type your job title or the role you are looking for:`);
     return;
   }
-  const chunks = chunkArray(jobTitles, 9);
-  const sections = chunks.map((chunk, i) => ({
-    title: i === 0 ? "Job Titles" : `Job Titles (${i + 1})`,
-    rows: chunk.map((jt) => ({ id: `JT_${jt.id}`, title: jt.name })),
-  }));
-  await safeListMessage(phoneNumber, `🧑‍💼 *Job Title*\n\nWhat is your job title or the role you are looking for?`, "Select job title", sections, "showJobTitles");
+  await safeListMessage(
+    phoneNumber,
+    `🧑‍💼 *Job Title*\n\nSelect your job title.\n\n_Showing first 10 — tap Done after selecting._`,
+    "Select job title", "Job Titles",
+    jobTitles.map((jt) => ({ id: `JT_${jt.id}`, title: jt.name })),
+    "showJobTitles"
+  );
 }
 
 // ─── STEP 12: ASK_JOB_TITLE ───────────────────────────────────────────────
@@ -372,12 +378,13 @@ export async function handleJobTitleDone(session: BotSession) {
   if (!industryId) { await proceedToExperience(session); return; }
   const skills = await getSkillsByIndustry(industryId);
   if (skills.length === 0) { await proceedToExperience(session); return; }
-  const chunks = chunkArray(skills, 9);
-  const sections = chunks.map((chunk, i) => ({
-    title: i === 0 ? "Skills" : `Skills (${i + 1})`,
-    rows: chunk.map((s) => ({ id: `SKILL_${s.id}`, title: s.name })),
-  }));
-  await safeListMessage(session.phone_number, `🔧 *Skills*\n\nSelect your key skills. You can add multiple.\n\nSkills shown are filtered for your industry.`, "Select skill", sections, "handleJobTitleDone");
+  await safeListMessage(
+    session.phone_number,
+    `🔧 *Skills*\n\nSelect a key skill for your industry.\n\n_Showing first 10._`,
+    "Select skill", "Skills",
+    skills.map((s) => ({ id: `SKILL_${s.id}`, title: s.name })),
+    "handleJobTitleDone"
+  );
   await updateSession(session.phone_number, BotStep.ASK_SKILLS, session.session_data);
 }
 
@@ -396,7 +403,7 @@ export async function handleAskSkills(session: BotSession, msg: WhatsAppMessage)
   const existingNames = session.session_data.skill_names ?? [];
   const updatedIds = existingIds.includes(skillId) ? existingIds : [...existingIds, skillId];
   const updatedNames = existingIds.includes(skillId) ? existingNames : [...existingNames, skillName];
-  await sendButtonMessage(session.phone_number, `Selected skills: *${updatedNames.join(", ")}*\n\nAdd another skill or tap Done.`, [
+  await sendButtonMessage(session.phone_number, `Selected: *${updatedNames.join(", ")}*\n\nAdd another skill or tap Done.`, [
     { id: "SKILLS_ADD_MORE", title: "Add another skill" },
     { id: "SKILLS_DONE", title: "Done" },
   ]);
@@ -407,11 +414,9 @@ async function proceedToExperience(session: BotSession) {
   await sendButtonMessage(session.phone_number, `⏳ *Experience*\n\nHow many years of work experience do you have?`, [
     { id: "EXP_0", title: "Less than 1 year" },
     { id: "EXP_1", title: "1–3 years" },
-  ]);
-  await sendButtonMessage(session.phone_number, "Or select:", [
     { id: "EXP_3", title: "3–5 years" },
-    { id: "EXP_5", title: "5+ years" },
   ]);
+  await sendButtonMessage(session.phone_number, "Or select:", [{ id: "EXP_5", title: "5+ years" }]);
   await updateSession(session.phone_number, BotStep.ASK_EXPERIENCE, session.session_data);
 }
 
@@ -424,20 +429,19 @@ export async function handleAskExperience(session: BotSession, msg: WhatsAppMess
     await sendButtonMessage(session.phone_number, "Please select your years of experience:", [
       { id: "EXP_0", title: "Less than 1 year" },
       { id: "EXP_1", title: "1–3 years" },
+      { id: "EXP_3", title: "3–5 years" },
     ]);
     return;
   }
   await safeListMessage(session.phone_number, `🎓 *Education Level*\n\nWhat is your highest level of education?`, "Select education",
-    [{
-      title: "Education Levels", rows: [
-        { id: "EDU_MATRIC", title: "Matric / Grade 12" },
-        { id: "EDU_DIPLOMA", title: "Diploma" },
-        { id: "EDU_DEGREE", title: "Degree" },
-        { id: "EDU_TRADE", title: "Trade / Artisan Certificate" },
-        { id: "EDU_POSTGRAD", title: "Postgraduate" },
-        { id: "EDU_NONE", title: "No formal qualification" },
-      ]
-    }], "ASK_EXPERIENCE"
+    "Education Levels", [
+      { id: "EDU_MATRIC", title: "Matric / Grade 12" },
+      { id: "EDU_DIPLOMA", title: "Diploma" },
+      { id: "EDU_DEGREE", title: "Degree" },
+      { id: "EDU_TRADE", title: "Trade / Artisan Certificate" },
+      { id: "EDU_POSTGRAD", title: "Postgraduate" },
+      { id: "EDU_NONE", title: "No formal qualification" },
+    ], "ASK_EXPERIENCE"
   );
   await updateSession(session.phone_number, BotStep.ASK_EDUCATION, { ...session.session_data, years_experience: expMap[reply] });
 }
@@ -468,26 +472,22 @@ export async function handleAskAvailability(session: BotSession, msg: WhatsAppMe
   const reply = getMessageText(msg);
   if (reply === "EMP_YES") {
     await safeListMessage(session.phone_number, `📅 *Notice Period*\n\nHow much notice do you need to give your current employer?`, "Select notice period",
-      [{
-        title: "Notice Period", rows: [
-          { id: "AVAIL_IMMEDIATE", title: "Immediately" }, { id: "AVAIL_1WEEK", title: "1 week" },
-          { id: "AVAIL_2WEEKS", title: "2 weeks" }, { id: "AVAIL_1MONTH", title: "1 month" },
-          { id: "AVAIL_OTHER", title: "Longer than 1 month" },
-        ]
-      }], "ASK_AVAILABILITY_employed"
+      "Notice Period", [
+        { id: "AVAIL_IMMEDIATE", title: "Immediately" }, { id: "AVAIL_1WEEK", title: "1 week" },
+        { id: "AVAIL_2WEEKS", title: "2 weeks" }, { id: "AVAIL_1MONTH", title: "1 month" },
+        { id: "AVAIL_OTHER", title: "Longer than 1 month" },
+      ], "ASK_AVAILABILITY_employed"
     );
     await updateSession(session.phone_number, BotStep.ASK_AVAILABILITY, { ...session.session_data, employment_status: "Employed" });
     return;
   }
   if (reply === "EMP_NO") {
     await safeListMessage(session.phone_number, `📅 *Start Date*\n\nWhen can you start working?`, "Select start date",
-      [{
-        title: "Availability", rows: [
-          { id: "AVAIL_IMMEDIATE", title: "Immediately" }, { id: "AVAIL_1WEEK", title: "Within 1 week" },
-          { id: "AVAIL_2WEEKS", title: "Within 2 weeks" }, { id: "AVAIL_1MONTH", title: "Within 1 month" },
-          { id: "AVAIL_OTHER", title: "Longer than 1 month" },
-        ]
-      }], "ASK_AVAILABILITY_unemployed"
+      "Availability", [
+        { id: "AVAIL_IMMEDIATE", title: "Immediately" }, { id: "AVAIL_1WEEK", title: "Within 1 week" },
+        { id: "AVAIL_2WEEKS", title: "Within 2 weeks" }, { id: "AVAIL_1MONTH", title: "Within 1 month" },
+        { id: "AVAIL_OTHER", title: "Longer than 1 month" },
+      ], "ASK_AVAILABILITY_unemployed"
     );
     await updateSession(session.phone_number, BotStep.ASK_AVAILABILITY, { ...session.session_data, employment_status: "Unemployed" });
     return;
@@ -504,14 +504,12 @@ export async function handleAskAvailability(session: BotSession, msg: WhatsAppMe
     return;
   }
   await safeListMessage(session.phone_number, `💰 *Expected Salary*\n\nWhat is your expected monthly salary?`, "Select range",
-    [{
-      title: "Monthly Salary (ZAR)", rows: [
-        { id: "SAL_5", title: "R5,000 – R10,000" }, { id: "SAL_10", title: "R10,000 – R15,000" },
-        { id: "SAL_15", title: "R15,000 – R25,000" }, { id: "SAL_25", title: "R25,000 – R40,000" },
-        { id: "SAL_40", title: "R40,000 – R60,000" }, { id: "SAL_60", title: "R60,000+" },
-        { id: "SAL_NEG", title: "Negotiable" },
-      ]
-    }], "ASK_AVAILABILITY_salary"
+    "Monthly Salary (ZAR)", [
+      { id: "SAL_5", title: "R5,000 – R10,000" }, { id: "SAL_10", title: "R10,000 – R15,000" },
+      { id: "SAL_15", title: "R15,000 – R25,000" }, { id: "SAL_25", title: "R25,000 – R40,000" },
+      { id: "SAL_40", title: "R40,000 – R60,000" }, { id: "SAL_60", title: "R60,000+" },
+      { id: "SAL_NEG", title: "Negotiable" },
+    ], "ASK_AVAILABILITY_salary"
   );
   await updateSession(session.phone_number, BotStep.ASK_SALARY, { ...session.session_data, availability });
 }
@@ -528,18 +526,16 @@ export async function handleAskSalary(session: BotSession, msg: WhatsAppMessage)
   const jobTypes = await getJobTypes();
   if (jobTypes.length === 0) {
     await sendButtonMessage(session.phone_number, `🗂️ *Work Type*\n\nWhat type of work are you looking for?`, [
-      { id: "JT_TYPE_1", title: "Full-time" }, { id: "JT_TYPE_2", title: "Part-time" },
+      { id: "JT_TYPE_1", title: "Full-time" },
+      { id: "JT_TYPE_2", title: "Part-time" },
+      { id: "JT_TYPE_3", title: "Contract" },
     ]);
-    await sendButtonMessage(session.phone_number, "Or select:", [{ id: "JT_TYPE_3", title: "Contract" }]);
     await updateSession(session.phone_number, BotStep.ASK_WORK_TYPE, { ...session.session_data, expected_salary: salaryMap[reply] });
     return;
   }
-  const chunks = chunkArray(jobTypes, 9);
-  const sections = chunks.map((chunk, i) => ({
-    title: i === 0 ? "Work Types" : `Work Types (${i + 1})`,
-    rows: chunk.map((jt) => ({ id: `JT_TYPE_${jt.id}`, title: jt.name })),
-  }));
-  await safeListMessage(session.phone_number, `🗂️ *Work Type*\n\nWhat type of work are you looking for?`, "Select work type", sections, "ASK_SALARY");
+  await safeListMessage(session.phone_number, `🗂️ *Work Type*\n\nWhat type of work are you looking for?`, "Select work type",
+    "Work Types", jobTypes.map((jt) => ({ id: `JT_TYPE_${jt.id}`, title: jt.name })), "ASK_SALARY"
+  );
   await updateSession(session.phone_number, BotStep.ASK_WORK_TYPE, { ...session.session_data, expected_salary: salaryMap[reply] });
 }
 
@@ -580,18 +576,12 @@ export async function handleAskRelocate(session: BotSession, msg: WhatsAppMessag
 
 export async function handleAskDriversLicense(session: BotSession, msg: WhatsAppMessage) {
   const reply = getMessageText(msg);
-  if (reply === "DL_NO") {
-    await proceedToCvUpload(session, { ...session.session_data, drivers_license: false });
-    return;
-  }
+  if (reply === "DL_NO") { await proceedToCvUpload(session, { ...session.session_data, drivers_license: false }); return; }
   if (reply === "DL_YES") {
     const codes = await getDriversLicenseCodes();
-    const chunks = chunkArray(codes, 9);
-    const sections = chunks.map((chunk, i) => ({
-      title: i === 0 ? "Licence Codes" : `Licence Codes (${i + 1})`,
-      rows: chunk.map((c) => ({ id: `DLC_${c.id}`, title: c.name })),
-    }));
-    await safeListMessage(session.phone_number, "Please select your driver's licence code:", "Select code", sections, "ASK_DRIVERS_LICENSE");
+    await safeListMessage(session.phone_number, "Please select your driver's licence code:", "Select code",
+      "Licence Codes", codes.map((c) => ({ id: `DLC_${c.id}`, title: c.name })), "ASK_DRIVERS_LICENSE"
+    );
     await updateSession(session.phone_number, BotStep.ASK_DRIVERS_LICENSE_CODE, { ...session.session_data, drivers_license: true });
     return;
   }
@@ -602,17 +592,14 @@ export async function handleAskDriversLicense(session: BotSession, msg: WhatsApp
 
 export async function handleAskDriversLicenseCode(session: BotSession, msg: WhatsAppMessage) {
   const reply = getMessageText(msg);
-  if (!reply.startsWith("DLC_")) {
-    await sendTextMessage(session.phone_number, "Please select a licence code from the list.");
-    return;
-  }
+  if (!reply.startsWith("DLC_")) { await sendTextMessage(session.phone_number, "Please select a licence code from the list."); return; }
   const codeId = parseInt(reply.replace("DLC_", ""), 10);
   const codeName = getMessageLabel(msg);
   await proceedToCvUpload(session, { ...session.session_data, drivers_license_code_id: codeId, drivers_license_code: codeName });
 }
 
 async function proceedToCvUpload(session: BotSession, data: SessionData) {
-  await sendButtonMessage(session.phone_number, `📁 *CV Upload*\n\nWould you like to upload your CV? This helps recruiters see your full profile.\n(PDF or image)`, [
+  await sendButtonMessage(session.phone_number, `📁 *CV Upload*\n\nWould you like to upload your CV?\n(PDF or image)`, [
     { id: "CV_UPLOAD", title: "Upload CV" }, { id: "CV_SKIP", title: "Skip for now" },
   ]);
   await updateSession(session.phone_number, BotStep.ASK_CV_UPLOAD, data);
@@ -638,15 +625,12 @@ export async function handleAskCvUpload(session: BotSession, msg: WhatsAppMessag
     }
     return;
   }
-  if (reply === "CV_UPLOAD") {
-    await sendTextMessage(session.phone_number, "Please send your CV as a *PDF* or *image* file now. 📎");
-    return;
-  }
+  if (reply === "CV_UPLOAD") { await sendTextMessage(session.phone_number, "Please send your CV as a *PDF* or *image* file now. 📎"); return; }
   await proceedToCriminalRecord(session);
 }
 
 async function proceedToCriminalRecord(session: BotSession) {
-  await sendButtonMessage(session.phone_number, `🔍 *Criminal Record (optional)*\n\nDo you have a criminal record?\n\nYou can tap *No / Skip* and this will be marked as No.`, [
+  await sendButtonMessage(session.phone_number, `🔍 *Criminal Record (optional)*\n\nDo you have a criminal record?`, [
     { id: "CR_YES", title: "Yes" }, { id: "CR_NO", title: "No / Skip" },
   ]);
   await updateSession(session.phone_number, BotStep.ASK_CRIMINAL_RECORD, session.session_data);
@@ -659,12 +643,9 @@ export async function handleAskCriminalRecord(session: BotSession, msg: WhatsApp
   if (reply === "CR_NO") { await proceedToDismissal(session, { ...session.session_data, criminal_record: false }); return; }
   if (reply === "CR_YES") {
     const offences = await getCriminalOffences();
-    const chunks = chunkArray(offences, 9);
-    const sections = chunks.map((chunk, i) => ({
-      title: i === 0 ? "Offence Types" : `Offence Types (${i + 1})`,
-      rows: chunk.map((o) => ({ id: `OFF_${o.id}`, title: o.name })),
-    }));
-    await safeListMessage(session.phone_number, "Please select the type of offence:", "Select offence", sections, "ASK_CRIMINAL_RECORD");
+    await safeListMessage(session.phone_number, "Please select the type of offence:", "Select offence",
+      "Offence Types", offences.map((o) => ({ id: `OFF_${o.id}`, title: o.name })), "ASK_CRIMINAL_RECORD"
+    );
     await updateSession(session.phone_number, BotStep.ASK_CRIMINAL_OFFENCE, { ...session.session_data, criminal_record: true });
     return;
   }
@@ -675,17 +656,14 @@ export async function handleAskCriminalRecord(session: BotSession, msg: WhatsApp
 
 export async function handleAskCriminalOffence(session: BotSession, msg: WhatsAppMessage) {
   const reply = getMessageText(msg);
-  if (!reply.startsWith("OFF_")) {
-    await sendTextMessage(session.phone_number, "Please select an offence from the list.");
-    return;
-  }
+  if (!reply.startsWith("OFF_")) { await sendTextMessage(session.phone_number, "Please select an offence from the list."); return; }
   const offenceId = parseInt(reply.replace("OFF_", ""), 10);
   const offenceName = getMessageLabel(msg);
   await proceedToDismissal(session, { ...session.session_data, criminal_offence_id: offenceId, criminal_offence: offenceName });
 }
 
 async function proceedToDismissal(session: BotSession, data: SessionData) {
-  await sendButtonMessage(session.phone_number, `⚠️ *Previous Dismissal (optional)*\n\nHave you ever been dismissed from a previous job?\n\nThis is optional — tap *No / Skip* to continue.`, [
+  await sendButtonMessage(session.phone_number, `⚠️ *Previous Dismissal (optional)*\n\nHave you ever been dismissed from a previous job?`, [
     { id: "DISMISS_YES", title: "Yes" }, { id: "DISMISS_NO", title: "No / Skip" },
   ]);
   await updateSession(session.phone_number, BotStep.ASK_DISMISSAL, data);
@@ -697,7 +675,7 @@ export async function handleAskDismissal(session: BotSession, msg: WhatsAppMessa
   const reply = getMessageText(msg);
   if (reply === "DISMISS_NO") { await sendReviewSummary(session, { ...session.session_data, dismissed_previously: false }); return; }
   if (reply === "DISMISS_YES") {
-    await sendTextMessage(session.phone_number, `Please briefly explain the reason for your dismissal (optional — type *skip* to continue):`);
+    await sendTextMessage(session.phone_number, `Please briefly explain the reason (optional — type *skip* to continue):`);
     await updateSession(session.phone_number, BotStep.ASK_DISMISSAL, { ...session.session_data, dismissed_previously: true });
     return;
   }
