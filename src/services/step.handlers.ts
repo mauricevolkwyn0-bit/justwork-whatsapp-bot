@@ -434,6 +434,10 @@ export async function handleAskJobTitle(session: BotSession, msg: WhatsAppMessag
 }
 
 export async function handleJobTitleDone(session: BotSession) {
+  if (session.session_data.is_update_mode) {
+    await sendUpdateConfirmation(session);
+    return;
+  }  
   const industryId = session.session_data.industry_id;
   if (!industryId) { await proceedToExperience(session); return; }
   const skills = await getSkillsByIndustry(industryId);
@@ -874,12 +878,9 @@ export async function handleComplete(session: BotSession, msg: WhatsAppMessage) 
   const reply = getMessageText(msg);
   const firstName = session.session_data.name?.split(" ")[0] ?? "there";
 
-  // Handle menu selections
   switch (reply) {
     case "MENU_SETTINGS":
-      await sendTextMessage(session.phone_number,
-        `⚙️ *Settings*\n\nYour current profile details:\n\n📍 *Province:* ${session.session_data.province_name}\n🏙️ *City:* ${session.session_data.city}\n💼 *Job Title(s):* ${session.session_data.job_title_names?.join(", ")}\n💰 *Expected Salary:* R${session.session_data.expected_salary?.toLocaleString()}/month\n\nTo update your profile, type *update* and we'll walk you through the changes.`
-      );
+      await handleMenuSettings(session);
       return;
 
     case "MENU_HELP":
@@ -894,10 +895,12 @@ export async function handleComplete(session: BotSession, msg: WhatsAppMessage) 
       );
       return;
 
-    case "MENU_UPDATE":
-      await sendTextMessage(session.phone_number,
-        `🔄 To update your profile, type *Hi* to restart the registration process.\n\nYour existing data will be overwritten once you complete the new registration.`
-      );
+    case "SETTINGS_UPDATE":
+      await handleSettingsUpdateMenu(session);
+      return;
+
+    case "SETTINGS_BACK":
+      await handleMenuSettings(session);
       return;
   }
 
@@ -911,4 +914,508 @@ export async function handleComplete(session: BotSession, msg: WhatsAppMessage) 
       { id: "MENU_TERMS", title: "📄 Terms" },
     ]
   );
+}
+
+// ─── SETTINGS: Show profile summary with Update button ───────────────────
+
+async function handleMenuSettings(session: BotSession) {
+  const d = session.session_data;
+  const expLabels: Record<number, string> = {
+    0: "No experience / Less than 1 year", 1: "1–2 years", 3: "3–5 years",
+    5: "5–7 years", 7: "7–10 years", 10: "10–15 years", 15: "15+ years",
+  };
+
+  const summary = [
+    `⚙️ *My Profile*\n`,
+    `👤 *Name:* ${d.name ?? "Not provided"}`,
+    `📅 *Date of Birth:* ${d.date_of_birth ?? "Not provided"}`,
+    `⚧ *Gender:* ${d.gender ?? "Not provided"}`,
+    `🌍 *Citizenship:* ${d.citizenship ?? "Not provided"}`,
+    `📱 *Phone:* ${d.phone_number ?? "Not provided"}`,
+    `✉️ *Email:* ${d.email ?? "Not provided"}`,
+    `📍 *Province:* ${d.province_name ?? "Not provided"}`,
+    `🏙️ *City:* ${d.city ?? "Not provided"}`,
+    d.address ? `🏠 *Address:* ${d.address}` : null,
+    `🏭 *Industry:* ${d.industry_name ?? "Not provided"}`,
+    d.sub_industry_name ? `🔧 *Specialisation:* ${d.sub_industry_name}` : null,
+    `💼 *Job Title(s):* ${d.job_title_names?.join(", ") ?? "Not provided"}`,
+    d.skill_names?.length ? `🛠️ *Skills:* ${d.skill_names.join(", ")}` : null,
+    `⏳ *Experience:* ${expLabels[d.years_experience ?? 0] ?? "Not provided"}`,
+    `🎓 *Education:* ${d.education_level ?? "Not provided"}`,
+    `💼 *Employment:* ${d.employment_status ?? "Not provided"}`,
+    `📅 *Availability:* ${d.availability ?? "Not provided"}`,
+    d.expected_salary ? `💰 *Expected Salary:* R${d.expected_salary.toLocaleString()}/month` : `💰 *Expected Salary:* Negotiable`,
+    `🗂️ *Work Type:* ${d.work_type_name ?? "Not provided"}`,
+    `🗺️ *Willing to Relocate:* ${d.willing_to_relocate ? "Yes" : "No"}`,
+    `🚗 *Driver's Licence:* ${d.drivers_license ? `Yes (${d.drivers_license_code})` : "No"}`,
+    `📁 *CV:* ${d.cv_document_id ? "Uploaded ✅" : "Not uploaded"}`,
+  ].filter(Boolean).join("\n");
+
+  await sendTextMessage(session.phone_number, summary);
+  await sendButtonMessage(session.phone_number, "Would you like to update any of your details?", [
+    { id: "SETTINGS_UPDATE", title: "✏️ Update Profile" },
+    { id: "SETTINGS_BACK", title: "⬅️ Back to Menu" },
+  ]);
+}
+
+// ─── SETTINGS: Section selection list ────────────────────────────────────
+
+async function handleSettingsUpdateMenu(session: BotSession) {
+  await safeListMessage(
+    session.phone_number,
+    `✏️ *Update Profile*\n\nWhich section would you like to update?`,
+    "Select section",
+    "Profile Sections",
+    [
+      { id: "UPD_PERSONAL",    title: "👤 Personal Details" },
+      { id: "UPD_LOCATION",    title: "📍 Location" },
+      { id: "UPD_INDUSTRY",    title: "🏭 Industry & Job Title" },
+      { id: "UPD_EXPERIENCE",  title: "⏳ Experience & Education" },
+      { id: "UPD_EMPLOYMENT",  title: "💼 Employment & Salary" },
+      { id: "UPD_PREFERENCES", title: "🗂️ Work Preferences" },
+      { id: "UPD_DOCUMENTS",   title: "📁 CV Upload" },
+    ],
+    "handleSettingsUpdateMenu"
+  );
+  await updateSession(session.phone_number, BotStep.SETTINGS_UPDATE_SECTION, session.session_data);
+}
+
+// ─── STEP: SETTINGS_UPDATE_SECTION ───────────────────────────────────────
+
+export async function handleSettingsUpdateSection(session: BotSession, msg: WhatsAppMessage) {
+  const reply = getMessageText(msg);
+  const d = session.session_data;
+
+  switch (reply) {
+    case "UPD_PERSONAL":
+      await sendTextMessage(session.phone_number,
+        `👤 *Personal Details*\n\nCurrent name: *${d.name ?? "Not provided"}*\n\nPlease enter your new full name (or type *skip* to keep current):`
+      );
+      await updateSession(session.phone_number, BotStep.SETTINGS_EDIT_PERSONAL, d);
+      break;
+
+    case "UPD_LOCATION": {
+  const provinces = await getProvinces();
+  await sendTextMessage(session.phone_number,
+    `📍 *Location*\n\nCurrent province: *${d.province_name ?? "Not provided"}*\nCurrent city: *${d.city ?? "Not provided"}*\n\nLet's update your province first:`
+  );
+  await safeListMessage(session.phone_number, "Select your new province:", "Select province",
+    "South African Provinces", provinces.map((p) => ({ id: `PROV_${p.id}`, title: p.name })), "UPD_LOCATION"
+  );
+  await updateSession(session.phone_number, BotStep.SETTINGS_EDIT_LOCATION, d);
+  break;
+}
+
+case "UPD_INDUSTRY": {
+  const industries = await getIndustries();
+  await sendTextMessage(session.phone_number,
+    `🏭 *Industry & Job Title*\n\nCurrent industry: *${d.industry_name ?? "Not provided"}*\nCurrent job title(s): *${d.job_title_names?.join(", ") ?? "Not provided"}*\n\nLet's update your industry first:`
+  );
+  await sendIndustryList(session.phone_number, industries, 0);
+  await updateSession(session.phone_number, BotStep.SETTINGS_EDIT_INDUSTRY, { ...d, is_update_mode: true });
+  break;
+}
+
+    case "UPD_EXPERIENCE":
+      await safeListMessage(session.phone_number,
+        `⏳ *Experience & Education*\n\nCurrent experience: *${d.years_experience ?? "Not provided"} years*\nCurrent education: *${d.education_level ?? "Not provided"}*\n\nSelect your updated experience:`,
+        "Select experience", "Years of Experience",
+        [
+          { id: "EXP_0", title: "No experience" }, { id: "EXP_LT1", title: "Less than 1 year" },
+          { id: "EXP_1", title: "1–2 years" }, { id: "EXP_3", title: "3–5 years" },
+          { id: "EXP_5", title: "5–7 years" }, { id: "EXP_7", title: "7–10 years" },
+          { id: "EXP_10", title: "10–15 years" }, { id: "EXP_15", title: "15+ years" },
+        ],
+        "UPD_EXPERIENCE"
+      );
+      await updateSession(session.phone_number, BotStep.SETTINGS_EDIT_EXPERIENCE, d);
+      break;
+
+    case "UPD_EMPLOYMENT":
+      await sendButtonMessage(session.phone_number,
+        `💼 *Employment & Salary*\n\nCurrent status: *${d.employment_status ?? "Not provided"}*\nCurrent availability: *${d.availability ?? "Not provided"}*\nCurrent salary: *${d.expected_salary ? `R${d.expected_salary.toLocaleString()}` : "Negotiable"}*\n\nAre you currently employed?`,
+        [{ id: "EMP_YES", title: "Currently employed" }, { id: "EMP_NO", title: "Not employed" }]
+      );
+      await updateSession(session.phone_number, BotStep.SETTINGS_EDIT_EMPLOYMENT, d);
+      break;
+
+    case "UPD_PREFERENCES":
+      await sendButtonMessage(session.phone_number,
+        `🗂️ *Work Preferences*\n\nCurrent work type: *${d.work_type_name ?? "Not provided"}*\nWilling to relocate: *${d.willing_to_relocate ? "Yes" : "No"}*\nDriver's licence: *${d.drivers_license ? `Yes (${d.drivers_license_code})` : "No"}*\n\nAre you willing to relocate for work?`,
+        [{ id: "RELOCATE_YES", title: "Yes, I'll relocate" }, { id: "RELOCATE_NO", title: "No, staying local" }]
+      );
+      await updateSession(session.phone_number, BotStep.SETTINGS_EDIT_PREFERENCES, d);
+      break;
+
+    case "UPD_DOCUMENTS":
+      await sendButtonMessage(session.phone_number,
+        `📁 *CV Upload*\n\nCurrent CV: *${d.cv_document_id ? "Uploaded ✅" : "Not uploaded"}*\n\nWould you like to upload a new CV?`,
+        [{ id: "CV_UPLOAD", title: "Upload CV" }, { id: "CV_SKIP", title: "Keep current" }]
+      );
+      await updateSession(session.phone_number, BotStep.SETTINGS_EDIT_DOCUMENTS, d);
+      break;
+
+    default:
+      await handleSettingsUpdateMenu(session);
+  }
+}
+
+// ─── SETTINGS EDIT: PERSONAL ──────────────────────────────────────────────
+
+export async function handleSettingsEditPersonal(session: BotSession, msg: WhatsAppMessage) {
+  const input = getMessageLabel(msg).trim();
+
+  if (input.toLowerCase() !== "skip") {
+    if (input.split(/\s+/).length < 2) {
+      await sendTextMessage(session.phone_number, "Please enter your full name including surname, or type *skip*:");
+      return;
+    }
+    session.session_data.name = input;
+  }
+
+  // Now ask DOB
+  await sendTextMessage(session.phone_number,
+    `📅 *Date of Birth*\n\nCurrent: *${session.session_data.date_of_birth ?? "Not provided"}*\n\nEnter new date of birth, or type *skip*:`
+  );
+  await updateSession(session.phone_number, BotStep.SETTINGS_EDIT_PERSONAL_DOB, session.session_data);
+}
+
+export async function handleSettingsEditPersonalDob(session: BotSession, msg: WhatsAppMessage) {
+  const input = getMessageLabel(msg).trim();
+
+  if (input.toLowerCase() !== "skip") {
+    const parsed = new Date(input);
+    const isValid = !isNaN(parsed.getTime()) && parsed.getFullYear() > 1900 && parsed.getFullYear() < new Date().getFullYear();
+    if (!isValid) {
+      await sendTextMessage(session.phone_number, "Invalid date. Please try again or type *skip*:");
+      return;
+    }
+    session.session_data.date_of_birth = parsed.toISOString().split("T")[0];
+  }
+
+  await sendButtonMessage(session.phone_number,
+    `⚧ *Gender*\n\nCurrent: *${session.session_data.gender ?? "Not provided"}*\n\nSelect your gender:`,
+    [
+      { id: "GENDER_MALE", title: "Male" },
+      { id: "GENDER_FEMALE", title: "Female" },
+      { id: "GENDER_PREFER_NOT", title: "Prefer not to say" },
+    ]
+  );
+  await updateSession(session.phone_number, BotStep.SETTINGS_EDIT_PERSONAL_GENDER, session.session_data);
+}
+
+export async function handleSettingsEditPersonalGender(session: BotSession, msg: WhatsAppMessage) {
+  const reply = getMessageText(msg);
+  const genderMap: Record<string, string> = {
+    GENDER_MALE: "Male", GENDER_FEMALE: "Female", GENDER_PREFER_NOT: "Prefer not to say"
+  };
+  if (genderMap[reply]) session.session_data.gender = genderMap[reply];
+
+  await sendTextMessage(session.phone_number,
+    `✉️ *Email*\n\nCurrent: *${session.session_data.email ?? "Not provided"}*\n\nEnter new email, or type *skip*:`
+  );
+  await updateSession(session.phone_number, BotStep.SETTINGS_EDIT_PERSONAL_EMAIL, session.session_data);
+}
+
+export async function handleSettingsEditPersonalEmail(session: BotSession, msg: WhatsAppMessage) {
+  const input = getMessageLabel(msg).trim().toLowerCase();
+
+  if (input !== "skip" && input !== "") {
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(input)) {
+      await sendTextMessage(session.phone_number, "Invalid email. Please try again or type *skip*:");
+      return;
+    }
+    session.session_data.email = input;
+  }
+
+  await sendUpdateConfirmation(session);
+}
+
+// ─── SETTINGS EDIT: LOCATION ──────────────────────────────────────────────
+// Re-uses ASK_PROVINCE and ASK_CITY handlers — just set a flag so they
+// return to COMPLETE instead of continuing the onboarding flow.
+// The simplest approach: after city is saved, jump to confirmation.
+
+export async function handleSettingsEditLocation(session: BotSession, msg: WhatsAppMessage) {
+  const reply = getMessageText(msg);
+
+  if (reply.startsWith("PROV_")) {
+    const provinceId = parseInt(reply.replace("PROV_", ""), 10);
+    const provinceName = getMessageLabel(msg);
+    const citiesByProvince: Record<string, string[]> = {
+      Gauteng: ["Johannesburg", "Pretoria", "Soweto", "Ekurhuleni", "Centurion", "Sandton", "Midrand", "Roodepoort"],
+      "Western Cape": ["Cape Town", "Stellenbosch", "George", "Paarl", "Worcester", "Knysna", "Mossel Bay", "Hermanus"],
+      "KwaZulu-Natal": ["Durban", "Pietermaritzburg", "Richards Bay", "Newcastle", "Empangeni", "Umhlanga", "Ballito", "Port Shepstone"],
+      "Eastern Cape": ["Port Elizabeth", "East London", "Mthatha", "Queenstown", "King William's Town", "Grahamstown", "Uitenhage", "Bhisho"],
+      Limpopo: ["Polokwane", "Tzaneen", "Phalaborwa", "Louis Trichardt", "Mokopane", "Bela-Bela", "Thabazimbi", "Giyani"],
+      Mpumalanga: ["Nelspruit", "Witbank", "Middelburg", "Secunda", "Standerton", "Barberton", "White River", "Hazyview"],
+      "Free State": ["Bloemfontein", "Welkom", "Bethlehem", "Sasolburg", "Kroonstad", "Phuthaditjhaba", "Virginia", "Parys"],
+      "North West": ["Rustenburg", "Mahikeng", "Klerksdorp", "Potchefstroom", "Brits", "Lichtenburg", "Vryburg", "Wolmaransstad"],
+      "Northern Cape": ["Kimberley", "Upington", "Springbok", "De Aar", "Kuruman", "Kathu", "Calvinia", "Colesberg"],
+    };
+    const cities = citiesByProvince[provinceName] ?? ["Other"];
+    await safeListMessage(session.phone_number, `📍 *${provinceName}*\n\nWhich city or town are you based in?`, "Select city",
+      "Cities & Towns", cities.map((city, i) => ({ id: `CITY_${i}_${city}`, title: city })), "SETTINGS_EDIT_LOCATION"
+    );
+    await updateSession(session.phone_number, BotStep.SETTINGS_EDIT_LOCATION, {
+      ...session.session_data, province_id: provinceId, province_name: provinceName
+    });
+    return;
+  }
+
+  if (reply.startsWith("CITY_")) {
+    const city = getMessageLabel(msg);
+    await sendTextMessage(session.phone_number,
+      `🏠 *Street Address*\n\nCurrent: *${session.session_data.address ?? "Not provided"}*\n\nEnter new address, or type *skip*:`
+    );
+    await updateSession(session.phone_number, BotStep.SETTINGS_EDIT_LOCATION_ADDRESS, { ...session.session_data, city });
+    return;
+  }
+
+  // Reprompt province
+  const provinces = await getProvinces();
+  await safeListMessage(session.phone_number, "Please select your province:", "Select province",
+    "South African Provinces", provinces.map((p) => ({ id: `PROV_${p.id}`, title: p.name })), "SETTINGS_EDIT_LOCATION_reprompt"
+  );
+}
+
+export async function handleSettingsEditLocationAddress(session: BotSession, msg: WhatsAppMessage) {
+  const input = getMessageLabel(msg).trim();
+  const address = input.toLowerCase() === "skip" || input === "" ? session.session_data.address : input;
+  await sendUpdateConfirmation({ ...session, session_data: { ...session.session_data, address } });
+}
+
+// ─── SETTINGS EDIT: EXPERIENCE ────────────────────────────────────────────
+
+export async function handleSettingsEditExperience(session: BotSession, msg: WhatsAppMessage) {
+  const reply = getMessageText(msg);
+  const expMap: Record<string, number> = {
+    EXP_0: 0, EXP_LT1: 0, EXP_1: 1, EXP_3: 3,
+    EXP_5: 5, EXP_7: 7, EXP_10: 10, EXP_15: 15,
+  };
+  if (!Object.prototype.hasOwnProperty.call(expMap, reply)) {
+    await sendTextMessage(session.phone_number, "Please select from the list.");
+    return;
+  }
+  await safeListMessage(session.phone_number,
+    `🎓 *Education Level*\n\nCurrent: *${session.session_data.education_level ?? "Not provided"}*\n\nSelect your updated education level:`,
+    "Select education", "Education Levels",
+    [
+      { id: "EDU_MATRIC", title: "Matric / Grade 12" }, { id: "EDU_DIPLOMA", title: "Diploma" },
+      { id: "EDU_DEGREE", title: "Degree" }, { id: "EDU_TRADE", title: "Trade / Artisan Cert." },
+      { id: "EDU_POSTGRAD", title: "Postgraduate" }, { id: "EDU_NONE", title: "No formal qualification" },
+    ],
+    "SETTINGS_EDIT_EXPERIENCE"
+  );
+  await updateSession(session.phone_number, BotStep.SETTINGS_EDIT_EDUCATION, {
+    ...session.session_data, years_experience: expMap[reply]
+  });
+}
+
+export async function handleSettingsEditEducation(session: BotSession, msg: WhatsAppMessage) {
+  const reply = getMessageText(msg);
+  const eduMap: Record<string, string> = {
+    EDU_MATRIC: "Matric / Grade 12", EDU_DIPLOMA: "Diploma", EDU_DEGREE: "Degree",
+    EDU_TRADE: "Trade / Artisan Certificate", EDU_POSTGRAD: "Postgraduate", EDU_NONE: "No formal qualification",
+  };
+  const education_level = eduMap[reply];
+  if (!education_level) { await sendTextMessage(session.phone_number, "Please select from the list."); return; }
+  await sendUpdateConfirmation({ ...session, session_data: { ...session.session_data, education_level } });
+}
+
+// ─── SETTINGS EDIT: EMPLOYMENT ────────────────────────────────────────────
+// Reuses the same AVAIL_ IDs as the onboarding flow — the dispatcher routes
+// to SETTINGS_EDIT_EMPLOYMENT step so there's no conflict.
+
+export async function handleSettingsEditEmployment(session: BotSession, msg: WhatsAppMessage) {
+  const reply = getMessageText(msg);
+
+  if (reply === "EMP_YES") {
+    await safeListMessage(session.phone_number,
+      `📅 *Notice Period*\n\nCurrent: *${session.session_data.availability ?? "Not provided"}*\n\nHow much notice do you need to give?`,
+      "Select notice period", "Notice Period",
+      [
+        { id: "AVAIL_IMMEDIATE", title: "Immediately" }, { id: "AVAIL_1WEEK", title: "1 week" },
+        { id: "AVAIL_2WEEKS", title: "2 weeks" }, { id: "AVAIL_1MONTH", title: "1 month" },
+        { id: "AVAIL_OTHER", title: "Longer than 1 month" },
+      ],
+      "SETTINGS_EDIT_EMPLOYMENT_notice"
+    );
+    await updateSession(session.phone_number, BotStep.SETTINGS_EDIT_EMPLOYMENT, {
+      ...session.session_data, employment_status: "Employed"
+    });
+    return;
+  }
+
+  if (reply === "EMP_NO") {
+    await safeListMessage(session.phone_number,
+      `📅 *Start Date*\n\nCurrent: *${session.session_data.availability ?? "Not provided"}*\n\nWhen can you start?`,
+      "Select start date", "Availability",
+      [
+        { id: "AVAIL_IMMEDIATE", title: "Immediately" }, { id: "AVAIL_1WEEK", title: "Within 1 week" },
+        { id: "AVAIL_2WEEKS", title: "Within 2 weeks" }, { id: "AVAIL_1MONTH", title: "Within 1 month" },
+        { id: "AVAIL_OTHER", title: "Longer than 1 month" },
+      ],
+      "SETTINGS_EDIT_EMPLOYMENT_start"
+    );
+    await updateSession(session.phone_number, BotStep.SETTINGS_EDIT_EMPLOYMENT, {
+      ...session.session_data, employment_status: "Unemployed"
+    });
+    return;
+  }
+
+  const availMap: Record<string, string> = {
+    AVAIL_IMMEDIATE: "Immediately", AVAIL_1WEEK: "1 week", AVAIL_2WEEKS: "2 weeks",
+    AVAIL_1MONTH: "1 month", AVAIL_OTHER: "Longer than 1 month",
+  };
+  const availability = availMap[reply];
+  if (!availability) { await sendTextMessage(session.phone_number, "Please select from the list."); return; }
+
+  await safeListMessage(session.phone_number,
+    `💰 *Expected Salary*\n\nCurrent: *${session.session_data.expected_salary ? `R${session.session_data.expected_salary.toLocaleString()}` : "Negotiable"}*\n\nSelect your updated expected salary:`,
+    "Select range", "Monthly Salary (ZAR)",
+    [
+      { id: "SAL_5", title: "R5,000 – R10,000" }, { id: "SAL_10", title: "R10,000 – R15,000" },
+      { id: "SAL_15", title: "R15,000 – R25,000" }, { id: "SAL_25", title: "R25,000 – R40,000" },
+      { id: "SAL_40", title: "R40,000 – R60,000" }, { id: "SAL_60", title: "R60,000+" },
+      { id: "SAL_NEG", title: "Negotiable" },
+    ],
+    "SETTINGS_EDIT_EMPLOYMENT_salary"
+  );
+  await updateSession(session.phone_number, BotStep.SETTINGS_EDIT_SALARY, { ...session.session_data, availability });
+}
+
+export async function handleSettingsEditSalary(session: BotSession, msg: WhatsAppMessage) {
+  const reply = getMessageText(msg);
+  const salaryMap: Record<string, number> = {
+    SAL_5: 7500, SAL_10: 12500, SAL_15: 20000, SAL_25: 32500,
+    SAL_40: 50000, SAL_60: 60000, SAL_NEG: 0,
+  };
+  if (!Object.prototype.hasOwnProperty.call(salaryMap, reply)) {
+    await sendTextMessage(session.phone_number, "Please select from the list.");
+    return;
+  }
+  await sendUpdateConfirmation({ ...session, session_data: { ...session.session_data, expected_salary: salaryMap[reply] } });
+}
+
+// ─── SETTINGS EDIT: PREFERENCES ──────────────────────────────────────────
+
+export async function handleSettingsEditPreferences(session: BotSession, msg: WhatsAppMessage) {
+  const reply = getMessageText(msg);
+
+  if (reply === "RELOCATE_YES" || reply === "RELOCATE_NO") {
+    const jobTypes = await getJobTypes();
+    const willing_to_relocate = reply === "RELOCATE_YES";
+    const rows = jobTypes.length > 0
+      ? jobTypes.map((jt) => ({ id: `JT_TYPE_${jt.id}`, title: jt.name }))
+      : [{ id: "JT_TYPE_1", title: "Full-time" }, { id: "JT_TYPE_2", title: "Part-time" }, { id: "JT_TYPE_3", title: "Contract" }];
+    await safeListMessage(session.phone_number,
+      `🗂️ *Work Type*\n\nCurrent: *${session.session_data.work_type_name ?? "Not provided"}*\n\nSelect your updated work type:`,
+      "Select work type", "Work Types", rows, "SETTINGS_EDIT_PREFERENCES_worktype"
+    );
+    await updateSession(session.phone_number, BotStep.SETTINGS_EDIT_PREFERENCES, { ...session.session_data, willing_to_relocate });
+    return;
+  }
+
+  if (reply.startsWith("JT_TYPE_")) {
+    const workTypeId = parseInt(reply.replace("JT_TYPE_", ""), 10);
+    const workTypeName = getMessageLabel(msg);
+    await sendButtonMessage(session.phone_number,
+      `🚗 *Driver's Licence*\n\nCurrent: *${session.session_data.drivers_license ? `Yes (${session.session_data.drivers_license_code})` : "No"}*\n\nDo you have a valid driver's licence?`,
+      [{ id: "DL_YES", title: "Yes" }, { id: "DL_NO", title: "No" }]
+    );
+    await updateSession(session.phone_number, BotStep.SETTINGS_EDIT_DRIVERS_LICENSE, {
+      ...session.session_data, work_type_id: workTypeId, work_type_name: workTypeName
+    });
+    return;
+  }
+
+  await sendTextMessage(session.phone_number, "Please select from the options.");
+}
+
+export async function handleSettingsEditDriversLicense(session: BotSession, msg: WhatsAppMessage) {
+  const reply = getMessageText(msg);
+
+  if (reply === "DL_NO") {
+    await sendUpdateConfirmation({ ...session, session_data: { ...session.session_data, drivers_license: false, drivers_license_code: undefined, drivers_license_code_id: undefined } });
+    return;
+  }
+
+  if (reply === "DL_YES") {
+    const codes = await getDriversLicenseCodes();
+    await safeListMessage(session.phone_number,
+      `Please select your driver's licence code:\n\nCurrent: *${session.session_data.drivers_license_code ?? "None"}*`,
+      "Select code", "Licence Codes",
+      codes.map((c) => ({ id: `DLC_${c.id}`, title: c.name })),
+      "SETTINGS_EDIT_DRIVERS_LICENSE"
+    );
+    await updateSession(session.phone_number, BotStep.SETTINGS_EDIT_DRIVERS_LICENSE_CODE, { ...session.session_data, drivers_license: true });
+    return;
+  }
+
+  if (reply.startsWith("DLC_")) {
+    const codeId = parseInt(reply.replace("DLC_", ""), 10);
+    const codeName = getMessageLabel(msg);
+    await sendUpdateConfirmation({ ...session, session_data: { ...session.session_data, drivers_license_code_id: codeId, drivers_license_code: codeName } });
+    return;
+  }
+
+  await sendButtonMessage(session.phone_number, "Please select one:", [{ id: "DL_YES", title: "Yes" }, { id: "DL_NO", title: "No" }]);
+}
+
+export async function handleSettingsEditDriversLicenseCode(session: BotSession, msg: WhatsAppMessage) {
+  const reply = getMessageText(msg);
+  if (!reply.startsWith("DLC_")) { await sendTextMessage(session.phone_number, "Please select a licence code from the list."); return; }
+  const codeId = parseInt(reply.replace("DLC_", ""), 10);
+  const codeName = getMessageLabel(msg);
+  await sendUpdateConfirmation({ ...session, session_data: { ...session.session_data, drivers_license_code_id: codeId, drivers_license_code: codeName } });
+}
+
+// ─── SETTINGS EDIT: DOCUMENTS ─────────────────────────────────────────────
+
+export async function handleSettingsEditDocuments(session: BotSession, msg: WhatsAppMessage) {
+  const reply = getMessageText(msg);
+
+  if (reply === "CV_SKIP") { await sendUpdateConfirmation(session); return; }
+
+  if (msg.type === "document" || msg.type === "image") {
+    const mediaId = msg.document?.id ?? msg.image?.id ?? "";
+    try {
+      void downloadMediaBuffer(mediaId);
+      await sendTextMessage(session.phone_number, "✅ New CV received!");
+      await sendUpdateConfirmation({ ...session, session_data: { ...session.session_data, cv_document_id: "mock-cv-id" } });
+    } catch {
+      await sendTextMessage(session.phone_number, "Sorry, we couldn't process your CV. Please try again.");
+    }
+    return;
+  }
+
+  if (reply === "CV_UPLOAD") {
+    await sendTextMessage(session.phone_number, "Please send your CV as a *PDF* or *image* file now. 📎");
+    return;
+  }
+
+  await sendUpdateConfirmation(session);
+}
+
+// ─── SETTINGS: Update confirmation ────────────────────────────────────────
+
+async function sendUpdateConfirmation(session: BotSession) {
+  try {
+    await saveCandidateFromSession(
+      session.session_data.phone_number ?? session.phone_number,
+      session.session_data
+    );
+  } catch (err) {
+    console.error("[Settings] Failed to save updated candidate:", err);
+  }
+
+  await sendButtonMessage(session.phone_number,
+    `✅ *Profile updated!*\n\nYour changes have been saved.\n\nWhat would you like to do next?`,
+    [
+      { id: "MENU_SETTINGS", title: "⚙️ View Profile" },
+      { id: "SETTINGS_UPDATE", title: "✏️ Update More" },
+    ]
+  );
+  await updateSession(session.phone_number, BotStep.COMPLETE, session.session_data);
 }

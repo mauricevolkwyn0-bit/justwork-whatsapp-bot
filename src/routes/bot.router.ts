@@ -31,6 +31,21 @@ import {
   handleAskDismissal,
   handleReview,
   handleComplete,
+  handleSettingsUpdateSection,
+  handleSettingsEditPersonal,
+  handleSettingsEditPersonalDob,
+  handleSettingsEditPersonalGender,
+  handleSettingsEditPersonalEmail,
+  handleSettingsEditLocation,
+  handleSettingsEditLocationAddress,
+  handleSettingsEditExperience,
+  handleSettingsEditEducation,
+  handleSettingsEditEmployment,
+  handleSettingsEditSalary,
+  handleSettingsEditPreferences,
+  handleSettingsEditDriversLicense,
+  handleSettingsEditDriversLicenseCode,
+  handleSettingsEditDocuments
 } from "../services/step.handlers";
 import { getMessageText } from "../utils/message";
 
@@ -169,8 +184,39 @@ export async function routeMessage(
       return await handleReview(session, msg);
 
     case BotStep.COMPLETE:
-      await handleComplete(session, msg);
-      break;
+      await handleComplete(session, msg); break;
+    case BotStep.SETTINGS_UPDATE_SECTION:
+      await handleSettingsUpdateSection(session, msg); break;
+    case BotStep.SETTINGS_EDIT_PERSONAL:
+      await handleSettingsEditPersonal(session, msg); break;
+    case BotStep.SETTINGS_EDIT_PERSONAL_DOB:
+      await handleSettingsEditPersonalDob(session, msg); break;
+    case BotStep.SETTINGS_EDIT_PERSONAL_GENDER:
+      await handleSettingsEditPersonalGender(session, msg); break;
+    case BotStep.SETTINGS_EDIT_PERSONAL_EMAIL:
+      await handleSettingsEditPersonalEmail(session, msg); break;
+    case BotStep.SETTINGS_EDIT_LOCATION:
+      await handleSettingsEditLocation(session, msg); break;
+    case BotStep.SETTINGS_EDIT_LOCATION_ADDRESS:
+      await handleSettingsEditLocationAddress(session, msg); break;
+    case BotStep.SETTINGS_EDIT_INDUSTRY:
+      await handleAskIndustry(session, msg); break; // reuses onboarding handler, returns to COMPLETE via sendUpdateConfirmation
+    case BotStep.SETTINGS_EDIT_EXPERIENCE:
+      await handleSettingsEditExperience(session, msg); break;
+    case BotStep.SETTINGS_EDIT_EDUCATION:
+      await handleSettingsEditEducation(session, msg); break;
+    case BotStep.SETTINGS_EDIT_EMPLOYMENT:
+      await handleSettingsEditEmployment(session, msg); break;
+    case BotStep.SETTINGS_EDIT_SALARY:
+      await handleSettingsEditSalary(session, msg); break;
+    case BotStep.SETTINGS_EDIT_PREFERENCES:
+      await handleSettingsEditPreferences(session, msg); break;
+    case BotStep.SETTINGS_EDIT_DRIVERS_LICENSE:
+      await handleSettingsEditDriversLicense(session, msg); break;
+    case BotStep.SETTINGS_EDIT_DRIVERS_LICENSE_CODE:
+      await handleSettingsEditDriversLicenseCode(session, msg); break;
+    case BotStep.SETTINGS_EDIT_DOCUMENTS:
+      await handleSettingsEditDocuments(session, msg); break;
 
     case BotStep.DECLINED:
       if (GREETING_TRIGGERS.test(text)) {
