@@ -30,6 +30,7 @@ import {
   handleAskCriminalOffence,
   handleAskDismissal,
   handleReview,
+  handleComplete,
 } from "../services/step.handlers";
 import { getMessageText } from "../utils/message";
 
@@ -168,7 +169,8 @@ export async function routeMessage(
       return await handleReview(session, msg);
 
     case BotStep.COMPLETE:
-      return;
+      await handleComplete(session, msg);
+      break;
 
     case BotStep.DECLINED:
       if (GREETING_TRIGGERS.test(text)) {

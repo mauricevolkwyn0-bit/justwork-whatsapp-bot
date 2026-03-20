@@ -867,3 +867,48 @@ export async function handleReview(session: BotSession, msg: WhatsAppMessage) {
     await updateSession(session.phone_number, BotStep.START, {});
   }
 }
+
+// ─── STEP: COMPLETE (returning registered user) ───────────────────────────
+
+export async function handleComplete(session: BotSession, msg: WhatsAppMessage) {
+  const reply = getMessageText(msg);
+  const firstName = session.session_data.name?.split(" ")[0] ?? "there";
+
+  // Handle menu selections
+  switch (reply) {
+    case "MENU_SETTINGS":
+      await sendTextMessage(session.phone_number,
+        `⚙️ *Settings*\n\nYour current profile details:\n\n📍 *Province:* ${session.session_data.province_name}\n🏙️ *City:* ${session.session_data.city}\n💼 *Job Title(s):* ${session.session_data.job_title_names?.join(", ")}\n💰 *Expected Salary:* R${session.session_data.expected_salary?.toLocaleString()}/month\n\nTo update your profile, type *update* and we'll walk you through the changes.`
+      );
+      return;
+
+    case "MENU_HELP":
+      await sendTextMessage(session.phone_number,
+        `❓ *Help & Support*\n\nHere's how JustWork works:\n\n1️⃣ You register once with your details\n2️⃣ Recruiters post jobs on our platform\n3️⃣ When a job matches your profile, we send it to you here on WhatsApp\n4️⃣ You decide whether to apply\n\nNo need to keep checking job sites — the work comes to you! 💪\n\nFor further assistance, contact us at *support@justwork.co.za*`
+      );
+      return;
+
+    case "MENU_TERMS":
+      await sendTextMessage(session.phone_number,
+        `📄 *Terms & Conditions*\n\nBy registering on JustWork you agree that:\n\n• Your information is stored securely\n• Your profile is shared with recruiters only when a job matches\n• You can request deletion of your data at any time by replying *delete my data*\n• JustWork acts as a matching service and is not your employer\n\nFull terms: _https://justwork.co.za/terms_`
+      );
+      return;
+
+    case "MENU_UPDATE":
+      await sendTextMessage(session.phone_number,
+        `🔄 To update your profile, type *Hi* to restart the registration process.\n\nYour existing data will be overwritten once you complete the new registration.`
+      );
+      return;
+  }
+
+  // Default — show welcome back menu
+  await sendButtonMessage(
+    session.phone_number,
+    `👋 Welcome back, *${firstName}*!\n\nYou're already registered on JustWork. We'll notify you here when a matching job comes through.\n\nWhat would you like to do?`,
+    [
+      { id: "MENU_SETTINGS", title: "⚙️ My Profile" },
+      { id: "MENU_HELP", title: "❓ Help" },
+      { id: "MENU_TERMS", title: "📄 Terms" },
+    ]
+  );
+}
